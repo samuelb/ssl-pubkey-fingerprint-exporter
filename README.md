@@ -23,6 +23,8 @@ ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey=",ta
 ```
 
 ## Prometheus
+
+### Scrape configuration
 ```yaml
 scrape_configs:
   - job_name: "ssl-pubkey-fingerprint-exporter"
@@ -39,3 +41,9 @@ scrape_configs:
       - target_label: __address__
         replacement: ssl-pubkey-fingerprint-exporter:3000
 ```
+
+### Example Query
+```
+absent(ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey",target="example.com:443"})
+```
+
