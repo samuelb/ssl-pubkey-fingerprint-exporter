@@ -150,6 +150,16 @@ func main() {
 	http.HandleFunc("/probe", func(w http.ResponseWriter, r *http.Request) {
 		probeHandler(w, r)
 	})
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>
+			<head><title>SSL pubkey fingerprint exporter/title></head>
+			<body>
+			<h1>SSL pubkey fingerprint exporter</h1>
+			<p><a href="/probe?target=example.com:443">Probe example.com:443 for SSL pubkey fingerprint metrics</a></p>
+			<p><a href='/metrics'>Metrics</a></p>
+			</body>
+			</html>`))
+	})
 
 	log.Infoln("Listening on", listenAddress)
 	log.Fatal(http.ListenAndServe(listenAddress, nil))
