@@ -11,8 +11,8 @@ The created binaries will and up in the folder `dist/`.
 
 ## Docker
 ```
-docker pull samuel/ssl_pubkey_fingerprint_exporter
-docker run -p 3000:3000 samuel/ssl_pubkey_fingerprint_exporter
+docker pull basa/ssl_pubkey_fingerprint_exporter
+docker run -p 3000:3000 basa/ssl_pubkey_fingerprint_exporter
 ```
 
 ## Metrics

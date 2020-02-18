@@ -9,7 +9,7 @@ GOHOSTOS   ?= $(shell $(GO) env GOHOSTOS)
 GOHOSTARCH ?= $(shell $(GO) env GOHOSTARCH)
 
 DOCKER            ?= docker
-DOCKER_REPO       ?= samuelb
+DOCKER_REPO       ?= basa
 DOCKER_IMAGE_NAME ?= ssl-pubkey-fingerprint-exporter
 DOCKER_ARCH       ?= linux/amd64
 
