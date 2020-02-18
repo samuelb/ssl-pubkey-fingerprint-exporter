@@ -1,4 +1,4 @@
-VERSION     ?= 0.1.0
+VERSION     ?= 0.2.0
 BINARY_DIR  ?= dist
 BINARY_NAME ?= ssl_pubkey_fingerprint_exporter
 PLATFORMS   ?= linux/amd64 windows/amd64 darwin/amd64
