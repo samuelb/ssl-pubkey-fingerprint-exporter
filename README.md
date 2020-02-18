@@ -37,5 +37,5 @@ scrape_configs:
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: ssl-fingerprint-exporter:3000
+        replacement: ssl-pubkey-fingerprint-exporter:3000
 ```
