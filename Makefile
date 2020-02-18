@@ -29,7 +29,7 @@ test:
 	$(GO) test
 
 $(PLATFORMS):
-	GOOS=$(_OS) GOARCH=$(_ARCH) $(GO) build \
+	CGO_ENABLED=0 GOOS=$(_OS) GOARCH=$(_ARCH) $(GO) build \
 		 -o $(BINARY_DIR)/$(BINARY_NAME)-$(_OS)-$(_ARCH)
 
 docker: $(DOCKER_ARCH)
