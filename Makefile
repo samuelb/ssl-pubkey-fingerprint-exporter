@@ -32,21 +32,14 @@ $(PLATFORMS):
 	CGO_ENABLED=0 GOOS=$(_OS) GOARCH=$(_ARCH) $(GO) build \
 		 -o $(BINARY_DIR)/$(BINARY_NAME)-$(_OS)-$(_ARCH)
 
-docker: $(DOCKER_ARCH)
+docker:
 	$(DOCKER) build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		-t $(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(VERSION) .
 
-release: test $(PLATFORMS) docker
-	$(DOCKER) tag \
-		$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(VERSION) \
-		$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):latest
+release: test $(PLATFORMS)
 	$(SHA256SUM) $(BINARY_DIR)/$(BINARY_NAME)* | sed "s|$(BINARY_DIR)/||" > $(BINARY_DIR)/sha256sums.txt
-
-publish: release
-	$(DOCKER) push $(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(VERSION)
-	$(DOCKER) push $(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):latest
 
 clean:
 	$(GO) clean
