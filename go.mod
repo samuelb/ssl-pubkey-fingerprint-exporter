@@ -1,4 +1,4 @@
-module github.com/samuelb/ssl_pubkey_fingerprint_exporter
+module github.com/samuelb/ssl-pubkey-fingerprint-exporter
 
 go 1.13
 

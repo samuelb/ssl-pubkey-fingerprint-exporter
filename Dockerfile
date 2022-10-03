@@ -7,8 +7,8 @@ RUN cd /src && make linux/amd64
 
 FROM scratch
 
-COPY --from=build /src/dist/ssl_pubkey_fingerprint_exporter-linux-amd64 /ssl_pubkey_fingerprint_exporter
+COPY --from=build /src/dist/ssl-pubkey-fingerprint-exporter-linux-amd64 /ssl-pubkey-fingerprint-exporter
 
 EXPOSE 3000/tcp
 
-ENTRYPOINT ["/ssl_pubkey_fingerprint_exporter"]
+ENTRYPOINT ["/ssl-pubkey-fingerprint-exporter"]
