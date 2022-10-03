@@ -1,7 +1,7 @@
 VERSION     ?= 0.2.0
 BINARY_DIR  ?= dist
 BINARY_NAME ?= ssl_pubkey_fingerprint_exporter
-PLATFORMS   ?= linux/amd64 windows/amd64 darwin/amd64
+PLATFORMS   ?= linux/amd64 windows/amd64 darwin/amd64 darwin/arm64
 
 GO         ?= go
 GOOPTS     ?=
