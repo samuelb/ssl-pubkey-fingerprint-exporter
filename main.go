@@ -16,7 +16,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -40,14 +40,14 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	target, err := parseTarget(e.target)
 	if err != nil {
-		log.Errorln(err)
+		log.Error(err)
 		http.Error(e.w, fmt.Sprintf("Failed to parse target %s: %s", target, err), http.StatusInternalServerError)
 		return
 	}
 
 	fingerprint, err := getFingerprint(target, e.timeout)
 	if err != nil {
-		log.Errorln(err)
+		log.Error(err)
 		http.Error(e.w, fmt.Sprintf("Failed to get publickey fingerprint from %s: %s", target, err), http.StatusInternalServerError)
 		return
 	}
@@ -106,7 +106,7 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 
 	timeoutSeconds, err := getScrapeTimeout(r, w)
 	if err != nil {
-		log.Errorln(err.Error())
+		log.Error(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -161,6 +161,6 @@ func main() {
 			</html>`))
 	})
 
-	log.Infoln("Listening on", listenAddress)
+	log.Info("Listening on", listenAddress)
 	log.Fatal(http.ListenAndServe(listenAddress, nil))
 }
