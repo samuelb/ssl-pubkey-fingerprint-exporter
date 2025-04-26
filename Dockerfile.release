@@ -1,5 +1,8 @@
 FROM scratch
 
+ARG TARGETARCH
+ARG TARGETOS
+
 COPY <<EOT /etc/passwd
 ssl-exporter:x:1000:1000:ssl-exporter:/app:/sbin/nologin
 EOT
