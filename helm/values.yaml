@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: basa/ssl-pubkey-fingerprint-exporter
-  tag: v0.3.0
+  tag: ""
   pullPolicy: IfNotPresent
 
 nameOverride: ""
