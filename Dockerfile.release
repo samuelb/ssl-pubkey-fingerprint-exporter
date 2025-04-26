@@ -1,0 +1,23 @@
+FROM alpine:3.19 AS build
+
+ARG VERSION
+ARG TARGETARCH
+
+RUN mkdir -p /rootfs/etc && \
+    echo 'ssl-exporter:x:1000:1000:ssl-exporter:/app:/sbin/nologin' > /rootfs/etc/passwd && \
+    echo 'ssl-exporter:x:1000:' > /rootfs/etc/group
+
+RUN wget -qO- https://github.com/samuelb/ssl-pubkey-fingerprint-exporter/releases/download/${VERSION}/ssl-pubkey-fingerprint-exporter-linux-${TARGETARCH} > /ssl-pubkey-fingerprint-exporter && \
+    wget -qO- https://github.com/samuelb/ssl-pubkey-fingerprint-exporter/releases/download/${VERSION}/sha256sums.txt > /sha256sums.txt && \
+    sha256sum -c --ignore-missing sha256sums.txt && \
+    chmod +x /ssl-pubkey-fingerprint-exporter
+
+FROM scratch
+
+COPY --from=build /rootfs /
+COPY --from=build /src/dist/ssl-pubkey-fingerprint-exporter-* /ssl-pubkey-fingerprint-exporter
+
+USER 1000:1000
+EXPOSE 3000/tcp
+
+ENTRYPOINT ["/ssl-pubkey-fingerprint-exporter"] 
