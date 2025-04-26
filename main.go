@@ -21,6 +21,9 @@ import (
 )
 
 var (
+	// Version is set during build
+	Version = "dev"
+
 	pubkeyFingerprint = prometheus.NewDesc(
 		"ssl_pubkey_fingerprint",
 		"SSL certificate publickey SHA-256 fingerprint",
@@ -186,19 +189,24 @@ func main() {
 		FullTimestamp: true,
 	})
 
+	log.WithFields(log.Fields{
+		"version": Version,
+		"address": config.ListenAddress,
+	}).Info("Starting server")
+
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/probe", probeHandler)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`<html>
+		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
 			<head><title>SSL pubkey fingerprint exporter</title></head>
 			<body>
 			<h1>SSL pubkey fingerprint exporter</h1>
+			<p>Version: %s</p>
 			<p><a href="/probe?target=example.com:443">Probe example.com:443 for SSL pubkey fingerprint metrics</a></p>
 			<p><a href='/metrics'>Metrics</a></p>
 			</body>
-			</html>`))
+			</html>`, Version)))
 	})
 
-	log.WithField("address", config.ListenAddress).Info("Starting server")
 	log.Fatal(http.ListenAndServe(config.ListenAddress, nil))
 }
