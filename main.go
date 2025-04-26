@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -25,12 +26,20 @@ var (
 		"SSL certificate publickey SHA-256 fingerprint",
 		[]string{"fingerprint", "target"}, nil,
 	)
+
+	// Default configuration
+	defaultListenAddress = ":3000"
+	defaultTimeout       = 10 * time.Second
 )
+
+type Config struct {
+	ListenAddress  string
+	DefaultTimeout time.Duration
+}
 
 type Exporter struct {
 	target  string
 	timeout time.Duration
-	w       http.ResponseWriter
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -40,15 +49,19 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	target, err := parseTarget(e.target)
 	if err != nil {
-		log.Error(err)
-		http.Error(e.w, fmt.Sprintf("Failed to parse target %s: %s", target, err), http.StatusInternalServerError)
+		log.WithFields(log.Fields{
+			"target": e.target,
+			"error":  err,
+		}).Error("Failed to parse target")
 		return
 	}
 
 	fingerprint, err := getFingerprint(target, e.timeout)
 	if err != nil {
-		log.Error(err)
-		http.Error(e.w, fmt.Sprintf("Failed to get publickey fingerprint from %s: %s", target, err), http.StatusInternalServerError)
+		log.WithFields(log.Fields{
+			"target": target,
+			"error":  err,
+		}).Error("Failed to get publickey fingerprint")
 		return
 	}
 
@@ -60,18 +73,23 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 func getFingerprint(target string, timeout time.Duration) (string, error) {
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, "tcp", target, &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to establish TLS connection: %w", err)
 	}
 	defer conn.Close()
 
 	connstate := conn.ConnectionState()
+	if len(connstate.PeerCertificates) == 0 {
+		return "", errors.New("no peer certificates found")
+	}
+
 	leafcert := connstate.PeerCertificates[0]
 	der, err := x509.MarshalPKIXPublicKey(leafcert.PublicKey)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal public key: %w", err)
 	}
+
 	hash := sha256.Sum256(der)
-	return base64.StdEncoding.EncodeToString(hash[0:]), nil
+	return base64.StdEncoding.EncodeToString(hash[:]), nil
 }
 
 func parseTarget(target string) (parsedTarget string, err error) {
@@ -81,20 +99,19 @@ func parseTarget(target string) (parsedTarget string, err error) {
 
 	u, err := url.Parse(target)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse URL: %w", err)
 	}
 
 	port := u.Port()
-
 	if port == "" {
 		if u.Scheme != "" {
 			p, err := net.LookupPort("tcp", u.Scheme)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to lookup port for scheme %s: %w", u.Scheme, err)
 			}
 			port = strconv.Itoa(p)
 		} else {
-			return "", errors.New("Can't parse target. Protocol scheme or port number is required")
+			return "", errors.New("protocol scheme or port number is required")
 		}
 	}
 
@@ -103,20 +120,23 @@ func parseTarget(target string) (parsedTarget string, err error) {
 
 func probeHandler(w http.ResponseWriter, r *http.Request) {
 	target := r.URL.Query().Get("target")
-
-	timeoutSeconds, err := getScrapeTimeout(r, w)
-	if err != nil {
-		log.Error(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if target == "" {
+		http.Error(w, "target parameter is required", http.StatusBadRequest)
 		return
 	}
 
-	timeout := time.Duration((timeoutSeconds) * 1e9)
+	timeoutSeconds, err := getScrapeTimeout(r)
+	if err != nil {
+		log.WithError(err).Error("Failed to get scrape timeout")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	timeout := time.Duration(timeoutSeconds * float64(time.Second))
 
 	exporter := &Exporter{
 		target:  target,
 		timeout: timeout,
-		w:       w,
 	}
 
 	registry := prometheus.NewRegistry()
@@ -126,33 +146,51 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-func getScrapeTimeout(r *http.Request, w http.ResponseWriter) (float64, error) {
-	var timeoutSeconds float64
+func getScrapeTimeout(r *http.Request) (float64, error) {
 	if v := r.Header.Get("X-Prometheus-Scrape-Timeout-Seconds"); v != "" {
-		var err error
-		timeoutSeconds, err = strconv.ParseFloat(v, 64)
+		timeoutSeconds, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			return -1, fmt.Errorf("Failed to parse timeout from Prometheus header: %s", err)
+			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: %w", err)
 		}
-	} else {
-		timeoutSeconds = 10
+		if timeoutSeconds > 0 {
+			return timeoutSeconds, nil
+		}
 	}
-	if timeoutSeconds == 0 {
-		timeoutSeconds = 10
+	return float64(defaultTimeout.Seconds()), nil
+}
+
+func getConfig() Config {
+	config := Config{
+		ListenAddress:  defaultListenAddress,
+		DefaultTimeout: defaultTimeout,
 	}
-	return timeoutSeconds, nil
+
+	if addr := os.Getenv("LISTEN_ADDRESS"); addr != "" {
+		config.ListenAddress = addr
+	}
+
+	if timeout := os.Getenv("DEFAULT_TIMEOUT"); timeout != "" {
+		if seconds, err := strconv.Atoi(timeout); err == nil && seconds > 0 {
+			config.DefaultTimeout = time.Duration(seconds) * time.Second
+		}
+	}
+
+	return config
 }
 
 func main() {
-	listenAddress := ":3000"
+	config := getConfig()
+
+	// Configure logging
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/probe", func(w http.ResponseWriter, r *http.Request) {
-		probeHandler(w, r)
-	})
+	http.HandleFunc("/probe", probeHandler)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`<html>
-			<head><title>SSL pubkey fingerprint exporter/title></head>
+			<head><title>SSL pubkey fingerprint exporter</title></head>
 			<body>
 			<h1>SSL pubkey fingerprint exporter</h1>
 			<p><a href="/probe?target=example.com:443">Probe example.com:443 for SSL pubkey fingerprint metrics</a></p>
@@ -161,6 +199,6 @@ func main() {
 			</html>`))
 	})
 
-	log.Info("Listening on", listenAddress)
-	log.Fatal(http.ListenAndServe(listenAddress, nil))
+	log.WithField("address", config.ListenAddress).Info("Starting server")
+	log.Fatal(http.ListenAndServe(config.ListenAddress, nil))
 }
