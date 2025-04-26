@@ -1,7 +1,7 @@
 VERSION     ?= 0.3.0
 BINARY_DIR  ?= dist
 BINARY_NAME ?= ssl-pubkey-fingerprint-exporter
-PLATFORMS   ?= linux/amd64 windows/amd64 darwin/amd64 darwin/arm64
+PLATFORMS   ?= linux/386 linux/amd64 linux/arm64 linux/mips linux/mipsle linux/mips64 linux/mips64le linux/ppc64 linux/ppc64le linux/riscv64 linux/s390x netbsd/386 netbsd/amd64 openbsd/amd64 windows/amd64 darwin/amd64 darwin/arm64
 
 GO         ?= go
 GOOPTS     ?=
