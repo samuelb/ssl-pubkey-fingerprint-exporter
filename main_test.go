@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func TestParseTarget(t *testing.T) {
@@ -106,35 +109,52 @@ func TestGetConfig(t *testing.T) {
 		name           string
 		listenAddress  string
 		defaultTimeout string
+		maxConcurrent  string
 		want           Config
 		shouldError    bool
 	}{
 		{
 			name: "defaults",
-			want: Config{ListenAddress: defaultListenAddress, DefaultTimeout: defaultTimeout},
+			want: Config{
+				ListenAddress:       defaultListenAddress,
+				DefaultTimeout:      defaultTimeout,
+				MaxConcurrentProbes: defaultMaxConcurrent,
+			},
 		},
 		{
 			name:           "integer seconds",
 			listenAddress:  ":8080",
 			defaultTimeout: "15",
-			want:           Config{ListenAddress: ":8080", DefaultTimeout: 15 * time.Second},
+			maxConcurrent:  "8",
+			want: Config{
+				ListenAddress:       ":8080",
+				DefaultTimeout:      15 * time.Second,
+				MaxConcurrentProbes: 8,
+			},
 		},
 		{
 			name:           "duration",
 			defaultTimeout: "750ms",
-			want:           Config{ListenAddress: defaultListenAddress, DefaultTimeout: 750 * time.Millisecond},
+			want: Config{
+				ListenAddress:       defaultListenAddress,
+				DefaultTimeout:      750 * time.Millisecond,
+				MaxConcurrentProbes: defaultMaxConcurrent,
+			},
 		},
 		{name: "invalid timeout", defaultTimeout: "later", shouldError: true},
 		{name: "zero timeout", defaultTimeout: "0", shouldError: true},
 		{name: "negative timeout", defaultTimeout: "-1s", shouldError: true},
 		{name: "overflowing seconds", defaultTimeout: "999999999999999999", shouldError: true},
 		{name: "integer parse overflow", defaultTimeout: "99999999999999999999999", shouldError: true},
+		{name: "invalid concurrency", maxConcurrent: "many", shouldError: true},
+		{name: "zero concurrency", maxConcurrent: "0", shouldError: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("LISTEN_ADDRESS", test.listenAddress)
 			t.Setenv("DEFAULT_TIMEOUT", test.defaultTimeout)
+			t.Setenv("MAX_CONCURRENT_PROBES", test.maxConcurrent)
 
 			config, err := getConfig()
 			if test.shouldError {
@@ -192,7 +212,11 @@ func TestProbeHandler(t *testing.T) {
 	ts := httptest.NewTLSServer(http.NotFoundHandler())
 	defer ts.Close()
 
-	handler := probeHandler(Config{DefaultTimeout: 5 * time.Second})
+	metricsRegistry := prometheus.NewRegistry()
+	handler := probeHandler(
+		Config{DefaultTimeout: 5 * time.Second, MaxConcurrentProbes: 2},
+		newProbeMetrics(metricsRegistry),
+	)
 
 	t.Run("missing target", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -235,4 +259,78 @@ func TestProbeHandler(t *testing.T) {
 			t.Errorf("body should contain probe_success 0, got:\n%s", body)
 		}
 	})
+}
+
+func TestProbeHandlerConcurrencyLimit(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer listener.Close()
+
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- conn
+		}
+	}()
+
+	metricsRegistry := prometheus.NewRegistry()
+	handler := probeHandler(
+		Config{DefaultTimeout: 5 * time.Second, MaxConcurrentProbes: 1},
+		newProbeMetrics(metricsRegistry),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	firstDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/probe?target="+listener.Addr().String(), nil).WithContext(ctx)
+		handler(w, r)
+		firstDone <- w
+	}()
+
+	var conn net.Conn
+	select {
+	case conn = <-accepted:
+		defer conn.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("first probe did not connect")
+	}
+
+	second := httptest.NewRecorder()
+	handler(second, httptest.NewRequest(http.MethodGet, "/probe?target="+listener.Addr().String(), nil))
+	if second.Code != http.StatusServiceUnavailable {
+		t.Errorf("second probe returned status %d, want %d", second.Code, http.StatusServiceUnavailable)
+	}
+	if retryAfter := second.Header().Get("Retry-After"); retryAfter != "1" {
+		t.Errorf("second probe returned Retry-After %q, want %q", retryAfter, "1")
+	}
+
+	cancel()
+	select {
+	case first := <-firstDone:
+		if first.Code != http.StatusOK {
+			t.Errorf("cancelled first probe returned status %d, want %d", first.Code, http.StatusOK)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("first probe did not stop after cancellation")
+	}
+
+	metricsResponse := httptest.NewRecorder()
+	promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}).ServeHTTP(
+		metricsResponse,
+		httptest.NewRequest(http.MethodGet, "/metrics", nil),
+	)
+	metricsBody := metricsResponse.Body.String()
+	if !strings.Contains(metricsBody, "ssl_pubkey_fingerprint_exporter_rejected_probes_total 1") {
+		t.Errorf("metrics should contain one rejected probe, got:\n%s", metricsBody)
+	}
+	if !strings.Contains(metricsBody, `ssl_pubkey_fingerprint_exporter_probes_total{result="failure"} 1`) {
+		t.Errorf("metrics should contain one failed probe, got:\n%s", metricsBody)
+	}
+	if !strings.Contains(metricsBody, "ssl_pubkey_fingerprint_exporter_active_probes 0") {
+		t.Errorf("metrics should contain zero active probes, got:\n%s", metricsBody)
+	}
 }

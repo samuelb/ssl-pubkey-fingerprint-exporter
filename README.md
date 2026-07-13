@@ -44,6 +44,7 @@ The exporter can be configured using environment variables:
 |----------|-------------|---------|
 | `LISTEN_ADDRESS` | Address to listen on | `:3000` |
 | `DEFAULT_TIMEOUT` | Default timeout as integer seconds or a Go duration such as `750ms` or `15s` | `10` |
+| `MAX_CONCURRENT_PROBES` | Maximum number of simultaneous outbound TLS probes | `64` |
 
 Invalid or non-positive timeout values cause the exporter to exit with a
 configuration error rather than silently falling back to the default.
@@ -86,6 +87,15 @@ probe_duration_seconds 0.042
 `probe_success` is `0` when the target could not be probed (unreachable
 host, TLS handshake failure, invalid target), so alerts can distinguish
 a changed fingerprint from a failed probe.
+
+The exporter also exposes operational metrics on `/metrics`:
+
+- `ssl_pubkey_fingerprint_exporter_active_probes`
+- `ssl_pubkey_fingerprint_exporter_probes_total{result="success|failure"}`
+- `ssl_pubkey_fingerprint_exporter_rejected_probes_total`
+
+Requests above `MAX_CONCURRENT_PROBES` receive HTTP 503 so overload is visible
+to Prometheus instead of creating an unbounded number of outbound connections.
 
 ### Targets
 

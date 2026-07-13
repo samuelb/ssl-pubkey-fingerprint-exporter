@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -49,6 +50,7 @@ var (
 	// Default configuration
 	defaultListenAddress = ":3000"
 	defaultTimeout       = 10 * time.Second
+	defaultMaxConcurrent = 64
 	scrapeTimeoutOffset  = 500 * time.Millisecond
 
 	// schemePorts maps URL schemes to their default ports. A static map is
@@ -69,14 +71,50 @@ var (
 )
 
 type Config struct {
-	ListenAddress  string
-	DefaultTimeout time.Duration
+	ListenAddress       string
+	DefaultTimeout      time.Duration
+	MaxConcurrentProbes int
 }
 
 type Exporter struct {
-	ctx     context.Context
-	target  string
-	timeout time.Duration
+	ctx          context.Context
+	target       string
+	timeout      time.Duration
+	once         sync.Once
+	success      bool
+	fingerprint  string
+	parsedTarget string
+	duration     time.Duration
+}
+
+type probeMetrics struct {
+	active   prometheus.Gauge
+	total    *prometheus.CounterVec
+	rejected prometheus.Counter
+}
+
+func newProbeMetrics(registerer prometheus.Registerer) *probeMetrics {
+	metrics := &probeMetrics{
+		active: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "ssl_pubkey_fingerprint_exporter",
+			Name:      "active_probes",
+			Help:      "Number of TLS probes currently being handled.",
+		}),
+		total: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "ssl_pubkey_fingerprint_exporter",
+			Name:      "probes_total",
+			Help:      "Total number of completed TLS probes.",
+		}, []string{"result"}),
+		rejected: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "ssl_pubkey_fingerprint_exporter",
+			Name:      "rejected_probes_total",
+			Help:      "Total number of probes rejected because the concurrency limit was reached.",
+		}),
+	}
+	registerer.MustRegister(metrics.active, metrics.total, metrics.rejected)
+	metrics.total.WithLabelValues("success")
+	metrics.total.WithLabelValues("failure")
+	return metrics
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -86,14 +124,18 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
-	start := time.Now()
-	success := e.probe(ch)
+	e.once.Do(e.runProbe)
+	if e.success {
+		ch <- prometheus.MustNewConstMetric(
+			pubkeyFingerprint, prometheus.GaugeValue, 1, e.fingerprint, e.parsedTarget,
+		)
+	}
 	ch <- prometheus.MustNewConstMetric(
-		probeDuration, prometheus.GaugeValue, time.Since(start).Seconds(),
+		probeDuration, prometheus.GaugeValue, e.duration.Seconds(),
 	)
 
 	successValue := 0.0
-	if success {
+	if e.success {
 		successValue = 1
 	}
 	ch <- prometheus.MustNewConstMetric(
@@ -101,23 +143,27 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	)
 }
 
-func (e *Exporter) probe(ch chan<- prometheus.Metric) bool {
+func (e *Exporter) runProbe() {
+	start := time.Now()
+	defer func() {
+		e.duration = time.Since(start)
+	}()
+
 	target, err := parseTarget(e.target)
 	if err != nil {
 		slog.Error("Failed to parse target", "target", e.target, "error", err)
-		return false
+		return
 	}
 
 	fingerprint, err := getFingerprint(e.ctx, target, e.timeout)
 	if err != nil {
 		slog.Error("Failed to get publickey fingerprint", "target", target, "error", err)
-		return false
+		return
 	}
 
-	ch <- prometheus.MustNewConstMetric(
-		pubkeyFingerprint, prometheus.GaugeValue, 1, fingerprint, target,
-	)
-	return true
+	e.success = true
+	e.fingerprint = fingerprint
+	e.parsedTarget = target
 }
 
 func getFingerprint(ctx context.Context, target string, timeout time.Duration) (string, error) {
@@ -192,7 +238,13 @@ func parseTarget(target string) (parsedTarget string, err error) {
 	return net.JoinHostPort(host, port), nil
 }
 
-func probeHandler(config Config) http.HandlerFunc {
+func probeHandler(config Config, metrics *probeMetrics) http.HandlerFunc {
+	maxConcurrent := config.MaxConcurrentProbes
+	if maxConcurrent <= 0 {
+		maxConcurrent = defaultMaxConcurrent
+	}
+	probeSlots := make(chan struct{}, maxConcurrent)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		target := r.URL.Query().Get("target")
 		if target == "" {
@@ -207,10 +259,38 @@ func probeHandler(config Config) http.HandlerFunc {
 			return
 		}
 
+		select {
+		case probeSlots <- struct{}{}:
+			if metrics != nil {
+				metrics.active.Inc()
+			}
+			defer func() {
+				<-probeSlots
+				if metrics != nil {
+					metrics.active.Dec()
+				}
+			}()
+		default:
+			if metrics != nil {
+				metrics.rejected.Inc()
+			}
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "maximum concurrent probes reached", http.StatusServiceUnavailable)
+			return
+		}
+
 		exporter := &Exporter{
 			ctx:     r.Context(),
 			target:  target,
 			timeout: timeout,
+		}
+		exporter.once.Do(exporter.runProbe)
+		if metrics != nil {
+			result := "failure"
+			if exporter.success {
+				result = "success"
+			}
+			metrics.total.WithLabelValues(result).Inc()
 		}
 
 		registry := prometheus.NewRegistry()
@@ -249,8 +329,9 @@ func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Durat
 
 func getConfig() (Config, error) {
 	config := Config{
-		ListenAddress:  defaultListenAddress,
-		DefaultTimeout: defaultTimeout,
+		ListenAddress:       defaultListenAddress,
+		DefaultTimeout:      defaultTimeout,
+		MaxConcurrentProbes: defaultMaxConcurrent,
 	}
 
 	if addr := os.Getenv("LISTEN_ADDRESS"); addr != "" {
@@ -263,6 +344,14 @@ func getConfig() (Config, error) {
 			return Config{}, err
 		}
 		config.DefaultTimeout = parsedTimeout
+	}
+
+	if value := os.Getenv("MAX_CONCURRENT_PROBES"); value != "" {
+		maxConcurrent, err := strconv.Atoi(value)
+		if err != nil || maxConcurrent <= 0 {
+			return Config{}, fmt.Errorf("MAX_CONCURRENT_PROBES must be a positive integer, got %q", value)
+		}
+		config.MaxConcurrentProbes = maxConcurrent
 	}
 
 	return config, nil
@@ -301,7 +390,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/probe", probeHandler(config))
+	mux.HandleFunc("/probe", probeHandler(config, newProbeMetrics(prometheus.DefaultRegisterer)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
 			<head><title>SSL pubkey fingerprint exporter</title></head>
