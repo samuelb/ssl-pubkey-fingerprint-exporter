@@ -54,7 +54,7 @@ func TestGetScrapeTimeout(t *testing.T) {
 	}{
 		{"no header", "", defaultTimeout, false},
 		{"header with offset headroom", "5", 4500 * time.Millisecond, false},
-		{"header below offset", "0.2", 200 * time.Millisecond, false},
+		{"header below offset", "0.2", 100 * time.Millisecond, false},
 		{"negative header", "-1", defaultTimeout, false},
 		{"invalid header", "not-a-number", 0, true},
 	}

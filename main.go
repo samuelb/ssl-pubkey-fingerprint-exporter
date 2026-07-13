@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -214,10 +215,10 @@ func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Durat
 			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: %w", err)
 		}
 		// Leave some headroom to respond before Prometheus closes the
-		// connection, like the blackbox exporter does.
-		if timeoutSeconds-scrapeTimeoutOffset.Seconds() > 0 {
-			timeoutSeconds -= scrapeTimeoutOffset.Seconds()
-		}
+		// connection, like the blackbox exporter does. For timeouts
+		// shorter than twice the offset, reserve half the timeout so
+		// there is always room to report probe_success 0.
+		timeoutSeconds = math.Max(timeoutSeconds-scrapeTimeoutOffset.Seconds(), timeoutSeconds/2)
 		if timeoutSeconds > 0 {
 			return time.Duration(timeoutSeconds * float64(time.Second)), nil
 		}
