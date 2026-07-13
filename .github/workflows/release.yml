@@ -66,7 +66,7 @@ jobs:
           config: cliff.toml
           args: --bump=${{ inputs.bump }} --unreleased --strip all --output RELEASE_NOTES.md
       - name: Upload release notes
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: RELEASE_NOTES.md
@@ -122,7 +122,7 @@ jobs:
           helm package ./helm --destination dist
           sha256sum dist/*.tgz | sed 's|dist/||' >> dist/sha256sums.txt
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binaries
           path: |
