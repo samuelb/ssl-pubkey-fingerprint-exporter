@@ -2,10 +2,7 @@ module github.com/samuelb/ssl-pubkey-fingerprint-exporter
 
 go 1.23.0
 
-require (
-	github.com/prometheus/client_golang v1.23.2
-	github.com/sirupsen/logrus v1.9.4
-)
+require github.com/prometheus/client_golang v1.23.2
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -101,19 +101,13 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 func (e *Exporter) probe(ch chan<- prometheus.Metric) bool {
 	target, err := parseTarget(e.target)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"target": e.target,
-			"error":  err,
-		}).Error("Failed to parse target")
+		slog.Error("Failed to parse target", "target", e.target, "error", err)
 		return false
 	}
 
 	fingerprint, err := getFingerprint(e.ctx, target, e.timeout)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"target": target,
-			"error":  err,
-		}).Error("Failed to get publickey fingerprint")
+		slog.Error("Failed to get publickey fingerprint", "target", target, "error", err)
 		return false
 	}
 
@@ -192,7 +186,7 @@ func probeHandler(config Config) http.HandlerFunc {
 
 		timeout, err := getScrapeTimeout(r, config.DefaultTimeout)
 		if err != nil {
-			log.WithError(err).Error("Failed to get scrape timeout")
+			slog.Error("Failed to get scrape timeout", "error", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -251,15 +245,7 @@ func getConfig() Config {
 func main() {
 	config := getConfig()
 
-	// Configure logging
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
-	})
-
-	log.WithFields(log.Fields{
-		"version": Version,
-		"address": config.ListenAddress,
-	}).Info("Starting server")
+	slog.Info("Starting server", "version", Version, "address", config.ListenAddress)
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/probe", probeHandler(config))
@@ -275,5 +261,8 @@ func main() {
 			</html>`, Version)))
 	})
 
-	log.Fatal(http.ListenAndServe(config.ListenAddress, nil))
+	if err := http.ListenAndServe(config.ListenAddress, nil); err != nil {
+		slog.Error("Server failed", "error", err)
+		os.Exit(1)
+	}
 }
