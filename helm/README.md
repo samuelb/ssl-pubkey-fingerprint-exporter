@@ -59,6 +59,9 @@ port, it is derived from the URL scheme.
 | `serviceMonitor.interval` | Scrape interval | `30s` |
 | `serviceMonitor.scrapeTimeout` | Scrape timeout | `10s` |
 | `serviceMonitor.additionalLabels` | Extra labels on the ServiceMonitor (e.g. to match a Prometheus selector) | `{}` |
+| `prometheusRule.enabled` | Create a PrometheusRule for the Prometheus Operator | `false` |
+| `prometheusRule.additionalLabels` | Extra labels on the PrometheusRule (e.g. to match a Prometheus rule selector) | `{}` |
+| `prometheusRule.rules` | Alerting rules | changed fingerprint, failing probe, rejected probes |
 | `ingress.enabled` | Create an Ingress | `false` |
 | `ingress.pathType` | Ingress path type | `ImplementationSpecific` |
 | `ingress.annotations` | Ingress annotations | `{}` |

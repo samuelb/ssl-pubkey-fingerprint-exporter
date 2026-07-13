@@ -116,7 +116,8 @@ jobs:
           helm template release ./helm
           helm template release ./helm \
             --set serviceMonitor.enabled=true \
-            --set-string serviceMonitor.targets[0]=example.com:443
+            --set-string serviceMonitor.targets[0]=example.com:443 \
+            --set prometheusRule.enabled=true
           helm package ./helm --destination dist
           sha256sum dist/*.tgz | sed 's|dist/||' >> dist/sha256sums.txt
       - name: Upload artifacts

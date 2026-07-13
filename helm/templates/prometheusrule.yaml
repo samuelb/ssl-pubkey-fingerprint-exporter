@@ -1,0 +1,22 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- if not .Values.prometheusRule.rules }}
+{{- fail "prometheusRule.rules must contain at least one rule when prometheusRule is enabled" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "spki-fingerprint-exporter.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
+    helm.sh/chart: {{ include "spki-fingerprint-exporter.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- with .Values.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: {{ include "spki-fingerprint-exporter.fullname" . }}
+      rules:
+        {{- toYaml .Values.prometheusRule.rules | nindent 8 }}
+{{- end }}

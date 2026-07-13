@@ -59,6 +59,7 @@ jobs:
           --set ingress.hosts[0].paths[0]=/
           --set serviceMonitor.enabled=true
           --set serviceMonitor.targets[0]=example.com:443
+          --set prometheusRule.enabled=true
       - name: Render legacy ingress on Kubernetes 1.13
         run: >-
           helm template test ./helm

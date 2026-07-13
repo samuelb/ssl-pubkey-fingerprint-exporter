@@ -73,6 +73,16 @@
         }
       }
     },
+    "prometheusRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["enabled", "additionalLabels", "rules"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "additionalLabels": { "type": "object" },
+        "rules": { "type": "array", "items": { "type": "object" } }
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": true,
@@ -121,6 +131,23 @@
         "properties": {
           "serviceMonitor": {
             "properties": { "targets": { "minItems": 1 } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "prometheusRule": {
+            "properties": { "enabled": { "const": true } },
+            "required": ["enabled"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "prometheusRule": {
+            "properties": { "rules": { "minItems": 1 } }
           }
         }
       }
