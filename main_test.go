@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -110,6 +111,8 @@ func TestGetConfig(t *testing.T) {
 		listenAddress  string
 		defaultTimeout string
 		maxConcurrent  string
+		logLevel       string
+		logFormat      string
 		want           Config
 		shouldError    bool
 	}{
@@ -119,6 +122,8 @@ func TestGetConfig(t *testing.T) {
 				ListenAddress:       defaultListenAddress,
 				DefaultTimeout:      defaultTimeout,
 				MaxConcurrentProbes: defaultMaxConcurrent,
+				LogLevel:            slog.LevelInfo,
+				LogFormat:           defaultLogFormat,
 			},
 		},
 		{
@@ -130,6 +135,8 @@ func TestGetConfig(t *testing.T) {
 				ListenAddress:       ":8080",
 				DefaultTimeout:      15 * time.Second,
 				MaxConcurrentProbes: 8,
+				LogLevel:            slog.LevelInfo,
+				LogFormat:           defaultLogFormat,
 			},
 		},
 		{
@@ -139,6 +146,20 @@ func TestGetConfig(t *testing.T) {
 				ListenAddress:       defaultListenAddress,
 				DefaultTimeout:      750 * time.Millisecond,
 				MaxConcurrentProbes: defaultMaxConcurrent,
+				LogLevel:            slog.LevelInfo,
+				LogFormat:           defaultLogFormat,
+			},
+		},
+		{
+			name:      "log level and format",
+			logLevel:  "debug",
+			logFormat: "JSON",
+			want: Config{
+				ListenAddress:       defaultListenAddress,
+				DefaultTimeout:      defaultTimeout,
+				MaxConcurrentProbes: defaultMaxConcurrent,
+				LogLevel:            slog.LevelDebug,
+				LogFormat:           "json",
 			},
 		},
 		{name: "invalid timeout", defaultTimeout: "later", shouldError: true},
@@ -148,6 +169,8 @@ func TestGetConfig(t *testing.T) {
 		{name: "integer parse overflow", defaultTimeout: "99999999999999999999999", shouldError: true},
 		{name: "invalid concurrency", maxConcurrent: "many", shouldError: true},
 		{name: "zero concurrency", maxConcurrent: "0", shouldError: true},
+		{name: "invalid log level", logLevel: "verbose", shouldError: true},
+		{name: "invalid log format", logFormat: "logfmt", shouldError: true},
 	}
 
 	for _, test := range tests {
@@ -155,6 +178,8 @@ func TestGetConfig(t *testing.T) {
 			t.Setenv("LISTEN_ADDRESS", test.listenAddress)
 			t.Setenv("DEFAULT_TIMEOUT", test.defaultTimeout)
 			t.Setenv("MAX_CONCURRENT_PROBES", test.maxConcurrent)
+			t.Setenv("LOG_LEVEL", test.logLevel)
+			t.Setenv("LOG_FORMAT", test.logFormat)
 
 			config, err := getConfig()
 			if test.shouldError {

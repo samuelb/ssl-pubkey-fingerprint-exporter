@@ -54,6 +54,7 @@ var (
 	defaultListenAddress = ":3000"
 	defaultTimeout       = 10 * time.Second
 	defaultMaxConcurrent = 64
+	defaultLogFormat     = "text"
 	scrapeTimeoutOffset  = 500 * time.Millisecond
 
 	// schemePorts maps URL schemes to their default ports. A static map is
@@ -77,6 +78,8 @@ type Config struct {
 	ListenAddress       string
 	DefaultTimeout      time.Duration
 	MaxConcurrentProbes int
+	LogLevel            slog.Level
+	LogFormat           string
 }
 
 type Exporter struct {
@@ -344,6 +347,8 @@ func getConfig() (Config, error) {
 		ListenAddress:       defaultListenAddress,
 		DefaultTimeout:      defaultTimeout,
 		MaxConcurrentProbes: defaultMaxConcurrent,
+		LogLevel:            slog.LevelInfo,
+		LogFormat:           defaultLogFormat,
 	}
 
 	if addr := os.Getenv("LISTEN_ADDRESS"); addr != "" {
@@ -366,7 +371,30 @@ func getConfig() (Config, error) {
 		config.MaxConcurrentProbes = maxConcurrent
 	}
 
+	if value := os.Getenv("LOG_LEVEL"); value != "" {
+		if err := config.LogLevel.UnmarshalText([]byte(value)); err != nil {
+			return Config{}, fmt.Errorf("LOG_LEVEL must be debug, info, warn, or error, got %q", value)
+		}
+	}
+
+	if value := os.Getenv("LOG_FORMAT"); value != "" {
+		format := strings.ToLower(value)
+		if format != "text" && format != "json" {
+			return Config{}, fmt.Errorf("LOG_FORMAT must be text or json, got %q", value)
+		}
+		config.LogFormat = format
+	}
+
 	return config, nil
+}
+
+func setupLogger(config Config) {
+	opts := &slog.HandlerOptions{Level: config.LogLevel}
+	var handler slog.Handler = slog.NewTextHandler(os.Stderr, opts)
+	if config.LogFormat == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(handler))
 }
 
 func parseDefaultTimeout(value string) (time.Duration, error) {
@@ -488,6 +516,7 @@ func main() {
 		slog.Error("Invalid configuration", "error", err)
 		os.Exit(1)
 	}
+	setupLogger(config)
 
 	slog.Info("Starting server", "version", Version, "address", config.ListenAddress)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

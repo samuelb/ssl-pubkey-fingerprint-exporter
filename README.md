@@ -33,6 +33,8 @@ the URL scheme (`https`, `smtps`, `submissions`, `nntps`, `ldaps`, `domain-s`,
 | `LISTEN_ADDRESS` | Address to listen on | `:3000` |
 | `DEFAULT_TIMEOUT` | Probe timeout: integer seconds or a Go duration (`750ms`, `15s`) | `10` |
 | `MAX_CONCURRENT_PROBES` | Maximum simultaneous outbound TLS probes | `64` |
+| `LOG_LEVEL` | Log level: `debug`, `info`, `warn`, or `error` | `info` |
+| `LOG_FORMAT` | Log format: `text` or `json` | `text` |
 
 Invalid or non-positive timeout values are a configuration error at startup,
 not a silent fallback.
