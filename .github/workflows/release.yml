@@ -90,7 +90,8 @@ jobs:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest
+            # Tag stable releases as latest; skip prereleases like v1.2.3-rc1
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
