@@ -32,6 +32,27 @@ Create chart name and version as used by the chart label.
 {{- end -}}
 
 {{/*
+Selector labels. These must stay stable across releases because the
+Deployment selector is immutable.
+*/}}
+{{- define "spki-fingerprint-exporter.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
+{{/*
+Common labels.
+*/}}
+{{- define "spki-fingerprint-exporter.labels" -}}
+{{ include "spki-fingerprint-exporter.selectorLabels" . }}
+helm.sh/chart: {{ include "spki-fingerprint-exporter.chart" . }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Chart.AppVersion }}
+app.kubernetes.io/version: {{ . | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Name of the ServiceAccount to use.
 */}}
 {{- define "spki-fingerprint-exporter.serviceAccountName" -}}

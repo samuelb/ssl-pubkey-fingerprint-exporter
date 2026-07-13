@@ -7,10 +7,7 @@ kind: PrometheusRule
 metadata:
   name: {{ include "spki-fingerprint-exporter.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
-    helm.sh/chart: {{ include "spki-fingerprint-exporter.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- include "spki-fingerprint-exporter.labels" . | nindent 4 }}
     {{- with .Values.prometheusRule.additionalLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
