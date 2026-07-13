@@ -195,9 +195,19 @@ jobs:
         id: push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # cosign reads registry credentials from the Docker config, which
+      # helm registry login does not write.
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Sign chart with cosign (keyless)
+        # Legacy signature format: ghcr rejects the OCI-referrers pushes
+        # of the cosign v3 default bundle format.
         run: |
-          cosign sign --yes \
+          cosign sign --yes --new-bundle-format=false \
             "ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/spki-fingerprint-exporter@${DIGEST}"
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
@@ -264,9 +274,13 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.2
       - name: Sign images with cosign (keyless)
+        # Legacy signature format: ghcr rejects the OCI-referrers pushes
+        # of the cosign v3 default bundle format.
         run: |
           while IFS= read -r image; do
-            [ -n "$image" ] && cosign sign --yes "${image}@${DIGEST}"
+            [ -z "$image" ] && continue
+            echo "Signing ${image}@${DIGEST}"
+            cosign sign --yes --new-bundle-format=false "${image}@${DIGEST}"
           done <<< "${DOCKER_IMAGES}"
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
