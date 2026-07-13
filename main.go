@@ -1,3 +1,6 @@
+// Command spki-fingerprint-exporter is a Prometheus exporter that
+// reports the SHA-256 fingerprint of the Subject Public Key Info (SPKI)
+// in certificates presented by TLS services.
 package main
 
 import (
@@ -190,7 +193,7 @@ func getFingerprint(ctx context.Context, target string, timeout time.Duration) (
 	if err != nil {
 		return "", fmt.Errorf("failed to establish TLS connection: %w", err)
 	}
-	defer netConn.Close()
+	defer func() { _ = netConn.Close() }()
 
 	conn := netConn.(*tls.Conn)
 	connstate := conn.ConnectionState()
@@ -325,7 +328,7 @@ func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Durat
 			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: %w", err)
 		}
 		if math.IsNaN(timeoutSeconds) || math.IsInf(timeoutSeconds, 0) || timeoutSeconds <= 0 {
-			return 0, fmt.Errorf("Prometheus scrape timeout must be a positive finite number, got %q", v)
+			return 0, fmt.Errorf("scrape timeout from Prometheus header must be a positive finite number, got %q", v)
 		}
 		// Leave some headroom to respond before Prometheus closes the
 		// connection, like the blackbox exporter does. For timeouts
@@ -333,11 +336,11 @@ func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Durat
 		// there is always room to report probe_success 0.
 		timeoutSeconds = math.Max(timeoutSeconds-scrapeTimeoutOffset.Seconds(), timeoutSeconds/2)
 		if timeoutSeconds >= float64(math.MaxInt64)/float64(time.Second) {
-			return 0, fmt.Errorf("Prometheus scrape timeout is too large: %q", v)
+			return 0, fmt.Errorf("scrape timeout from Prometheus header is too large: %q", v)
 		}
 		timeout := time.Duration(timeoutSeconds * float64(time.Second))
 		if timeout <= 0 {
-			return 0, fmt.Errorf("Prometheus scrape timeout is too small: %q", v)
+			return 0, fmt.Errorf("scrape timeout from Prometheus header is too small: %q", v)
 		}
 		return timeout, nil
 	}
@@ -444,7 +447,7 @@ func newHandler(config Config, registerer prometheus.Registerer, gatherer promet
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
+		_, _ = fmt.Fprintf(w, `<html>
 			<head><title>SPKI fingerprint exporter</title></head>
 			<body>
 			<h1>SPKI fingerprint exporter</h1>
@@ -452,7 +455,7 @@ func newHandler(config Config, registerer prometheus.Registerer, gatherer promet
 			<p><a href="/probe?target=example.com:443">Probe example.com:443 for TLS certificate SPKI fingerprint metrics</a></p>
 			<p><a href='/metrics'>Metrics</a></p>
 			</body>
-			</html>`, html.EscapeString(Version))))
+			</html>`, html.EscapeString(Version))
 	})
 	return mux
 }

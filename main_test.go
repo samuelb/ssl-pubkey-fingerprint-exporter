@@ -293,7 +293,9 @@ func TestProbeHandler(t *testing.T) {
 			t.Fatalf("failed to create listener: %v", err)
 		}
 		addr := l.Addr().String()
-		l.Close()
+		if err := l.Close(); err != nil {
+			t.Fatalf("failed to close listener: %v", err)
+		}
 
 		w := httptest.NewRecorder()
 		handler(w, httptest.NewRequest(http.MethodGet, "/probe?target="+addr, nil))
@@ -311,7 +313,7 @@ func TestProbeHandlerConcurrencyLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	accepted := make(chan net.Conn, 1)
 	go func() {
@@ -339,7 +341,7 @@ func TestProbeHandlerConcurrencyLimit(t *testing.T) {
 	var conn net.Conn
 	select {
 	case conn = <-accepted:
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	case <-time.After(2 * time.Second):
 		t.Fatal("first probe did not connect")
 	}
@@ -491,7 +493,7 @@ func TestServeWebConfigBasicAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request without credentials failed: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status without credentials = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
@@ -505,7 +507,7 @@ func TestServeWebConfigBasicAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request with credentials failed: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status with credentials = %d, want %d (empty mux)", resp.StatusCode, http.StatusNotFound)
 	}

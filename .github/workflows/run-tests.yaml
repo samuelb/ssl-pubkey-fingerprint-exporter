@@ -34,6 +34,18 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12
+
   helm:
     name: Helm
     runs-on: ubuntu-latest
