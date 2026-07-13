@@ -121,45 +121,45 @@ func parseTarget(target string) (parsedTarget string, err error) {
 	return u.Hostname() + ":" + port, nil
 }
 
-func probeHandler(w http.ResponseWriter, r *http.Request) {
-	target := r.URL.Query().Get("target")
-	if target == "" {
-		http.Error(w, "target parameter is required", http.StatusBadRequest)
-		return
+func probeHandler(config Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		target := r.URL.Query().Get("target")
+		if target == "" {
+			http.Error(w, "target parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		timeout, err := getScrapeTimeout(r, config.DefaultTimeout)
+		if err != nil {
+			log.WithError(err).Error("Failed to get scrape timeout")
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		exporter := &Exporter{
+			target:  target,
+			timeout: timeout,
+		}
+
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(exporter)
+
+		h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+		h.ServeHTTP(w, r)
 	}
-
-	timeoutSeconds, err := getScrapeTimeout(r)
-	if err != nil {
-		log.WithError(err).Error("Failed to get scrape timeout")
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	timeout := time.Duration(timeoutSeconds * float64(time.Second))
-
-	exporter := &Exporter{
-		target:  target,
-		timeout: timeout,
-	}
-
-	registry := prometheus.NewRegistry()
-	registry.MustRegister(exporter)
-
-	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
-	h.ServeHTTP(w, r)
 }
 
-func getScrapeTimeout(r *http.Request) (float64, error) {
+func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Duration, error) {
 	if v := r.Header.Get("X-Prometheus-Scrape-Timeout-Seconds"); v != "" {
 		timeoutSeconds, err := strconv.ParseFloat(v, 64)
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: %w", err)
 		}
 		if timeoutSeconds > 0 {
-			return timeoutSeconds, nil
+			return time.Duration(timeoutSeconds * float64(time.Second)), nil
 		}
 	}
-	return float64(defaultTimeout.Seconds()), nil
+	return defaultTimeout, nil
 }
 
 func getConfig() Config {
@@ -195,7 +195,7 @@ func main() {
 	}).Info("Starting server")
 
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/probe", probeHandler)
+	http.HandleFunc("/probe", probeHandler(config))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
 			<head><title>SSL pubkey fingerprint exporter</title></head>
