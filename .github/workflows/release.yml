@@ -205,9 +205,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Sign chart with cosign (keyless)
         # Legacy signature format: ghcr rejects the OCI-referrers pushes
-        # of the cosign v3 default bundle format.
+        # of the cosign v3 default bundle format, and the default signing
+        # config requires the bundle format, so disable both.
         run: |
-          cosign sign --yes --new-bundle-format=false \
+          cosign sign --yes --use-signing-config=false --new-bundle-format=false \
             "ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/spki-fingerprint-exporter@${DIGEST}"
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
@@ -275,12 +276,13 @@ jobs:
         uses: sigstore/cosign-installer@v4.1.2
       - name: Sign images with cosign (keyless)
         # Legacy signature format: ghcr rejects the OCI-referrers pushes
-        # of the cosign v3 default bundle format.
+        # of the cosign v3 default bundle format, and the default signing
+        # config requires the bundle format, so disable both.
         run: |
           while IFS= read -r image; do
             [ -z "$image" ] && continue
             echo "Signing ${image}@${DIGEST}"
-            cosign sign --yes --new-bundle-format=false "${image}@${DIGEST}"
+            cosign sign --yes --use-signing-config=false --new-bundle-format=false "${image}@${DIGEST}"
           done <<< "${DOCKER_IMAGES}"
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
