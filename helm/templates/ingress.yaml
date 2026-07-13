@@ -31,7 +31,7 @@ spec:
         paths:
         {{- range .paths }}
           - path: {{ . }}
-            pathType: Prefix
+            pathType: {{ $.Values.ingress.pathType | default "ImplementationSpecific" }}
             backend:
               service:
                 name: {{ $fullName }}
