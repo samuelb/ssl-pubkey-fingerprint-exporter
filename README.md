@@ -105,9 +105,13 @@ scrape_configs:
 
 ### Example PromQL queries
 
-Alert when the fingerprint changed:
+Alert when the fingerprint changed. The expression is gated on
+`probe_success` so it only fires when the probe succeeded but returned
+an unexpected fingerprint, not when the target was unreachable:
 ```
-absent(ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey",target="example.com:443"})
+probe_success{instance="example.com:443"} == 1
+unless on(instance)
+ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey="}
 ```
 
 Alert when the probe failed:
