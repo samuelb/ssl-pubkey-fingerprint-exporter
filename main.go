@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -45,6 +46,7 @@ var (
 	// Default configuration
 	defaultListenAddress = ":3000"
 	defaultTimeout       = 10 * time.Second
+	scrapeTimeoutOffset  = 500 * time.Millisecond
 
 	// schemePorts maps URL schemes to their default ports. A static map is
 	// used instead of net.LookupPort because the latter depends on
@@ -69,6 +71,7 @@ type Config struct {
 }
 
 type Exporter struct {
+	ctx     context.Context
 	target  string
 	timeout time.Duration
 }
@@ -105,7 +108,7 @@ func (e *Exporter) probe(ch chan<- prometheus.Metric) bool {
 		return false
 	}
 
-	fingerprint, err := getFingerprint(target, e.timeout)
+	fingerprint, err := getFingerprint(e.ctx, target, e.timeout)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"target": target,
@@ -120,13 +123,25 @@ func (e *Exporter) probe(ch chan<- prometheus.Metric) bool {
 	return true
 }
 
-func getFingerprint(target string, timeout time.Duration) (string, error) {
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, "tcp", target, &tls.Config{InsecureSkipVerify: true})
+func getFingerprint(ctx context.Context, target string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{},
+		// Certificate chain validation is intentionally skipped: this
+		// exporter fingerprints the presented public key, it does not
+		// validate the certificate.
+		Config: &tls.Config{InsecureSkipVerify: true}, // #nosec G402
+	}
+
+	netConn, err := dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		return "", fmt.Errorf("failed to establish TLS connection: %w", err)
 	}
-	defer conn.Close()
+	defer netConn.Close()
 
+	conn := netConn.(*tls.Conn)
 	connstate := conn.ConnectionState()
 	if len(connstate.PeerCertificates) == 0 {
 		return "", errors.New("no peer certificates found")
@@ -183,6 +198,7 @@ func probeHandler(config Config) http.HandlerFunc {
 		}
 
 		exporter := &Exporter{
+			ctx:     r.Context(),
 			target:  target,
 			timeout: timeout,
 		}
@@ -200,6 +216,11 @@ func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Durat
 		timeoutSeconds, err := strconv.ParseFloat(v, 64)
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: %w", err)
+		}
+		// Leave some headroom to respond before Prometheus closes the
+		// connection, like the blackbox exporter does.
+		if timeoutSeconds-scrapeTimeoutOffset.Seconds() > 0 {
+			timeoutSeconds -= scrapeTimeoutOffset.Seconds()
 		}
 		if timeoutSeconds > 0 {
 			return time.Duration(timeoutSeconds * float64(time.Second)), nil
