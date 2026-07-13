@@ -334,3 +334,83 @@ func TestProbeHandlerConcurrencyLimit(t *testing.T) {
 		t.Errorf("metrics should contain zero active probes, got:\n%s", metricsBody)
 	}
 }
+
+func TestHTTPRoutes(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	handler := newHandler(
+		Config{DefaultTimeout: time.Second, MaxConcurrentProbes: 1},
+		registry,
+		registry,
+	)
+
+	tests := []struct {
+		name        string
+		method      string
+		path        string
+		status      int
+		contentType string
+	}{
+		{"root", http.MethodGet, "/", http.StatusOK, "text/html; charset=utf-8"},
+		{"healthy", http.MethodGet, "/-/healthy", http.StatusOK, "text/plain; charset=utf-8"},
+		{"healthy head", http.MethodHead, "/-/healthy", http.StatusOK, "text/plain; charset=utf-8"},
+		{"ready", http.MethodGet, "/-/ready", http.StatusOK, "text/plain; charset=utf-8"},
+		{"unknown", http.MethodGet, "/unknown", http.StatusNotFound, "text/plain; charset=utf-8"},
+		{"root method", http.MethodPost, "/", http.StatusMethodNotAllowed, "text/plain; charset=utf-8"},
+		{"probe method", http.MethodPost, "/probe", http.StatusMethodNotAllowed, "text/plain; charset=utf-8"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(test.method, test.path, nil))
+			if w.Code != test.status {
+				t.Errorf("status = %d, want %d", w.Code, test.status)
+			}
+			if contentType := w.Header().Get("Content-Type"); contentType != test.contentType {
+				t.Errorf("Content-Type = %q, want %q", contentType, test.contentType)
+			}
+		})
+	}
+}
+
+func TestRootEscapesVersion(t *testing.T) {
+	originalVersion := Version
+	Version = `<script>alert("version")</script>`
+	t.Cleanup(func() { Version = originalVersion })
+
+	registry := prometheus.NewRegistry()
+	handler := newHandler(
+		Config{DefaultTimeout: time.Second, MaxConcurrentProbes: 1},
+		registry,
+		registry,
+	)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if strings.Contains(w.Body.String(), "<script>") {
+		t.Errorf("root page contains unescaped version: %s", w.Body.String())
+	}
+}
+
+func TestServeGracefulShutdown(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	server := newServer(Config{}, http.NewServeMux())
+	go func() {
+		done <- serve(ctx, server, listener)
+	}()
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("serve returned an error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not shut down after cancellation")
+	}
+}

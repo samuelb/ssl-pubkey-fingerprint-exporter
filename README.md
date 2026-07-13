@@ -97,6 +97,9 @@ The exporter also exposes operational metrics on `/metrics`:
 Requests above `MAX_CONCURRENT_PROBES` receive HTTP 503 so overload is visible
 to Prometheus instead of creating an unbounded number of outbound connections.
 
+The `/-/healthy` and `/-/ready` endpoints return HTTP 200 while the exporter is
+running and can be used by container orchestrators.
+
 ### Targets
 
 Targets can be given as `host:port` or as a URL. When no port is

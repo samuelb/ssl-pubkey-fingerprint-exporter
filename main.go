@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"math"
 	"net"
@@ -246,6 +247,12 @@ func probeHandler(config Config, metrics *probeMetrics) http.HandlerFunc {
 	probeSlots := make(chan struct{}, maxConcurrent)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		target := r.URL.Query().Get("target")
 		if target == "" {
 			http.Error(w, "target parameter is required", http.StatusBadRequest)
@@ -264,12 +271,6 @@ func probeHandler(config Config, metrics *probeMetrics) http.HandlerFunc {
 			if metrics != nil {
 				metrics.active.Inc()
 			}
-			defer func() {
-				<-probeSlots
-				if metrics != nil {
-					metrics.active.Dec()
-				}
-			}()
 		default:
 			if metrics != nil {
 				metrics.rejected.Inc()
@@ -284,14 +285,23 @@ func probeHandler(config Config, metrics *probeMetrics) http.HandlerFunc {
 			target:  target,
 			timeout: timeout,
 		}
-		exporter.once.Do(exporter.runProbe)
-		if metrics != nil {
-			result := "failure"
-			if exporter.success {
-				result = "success"
+		func() {
+			defer func() {
+				<-probeSlots
+				if metrics != nil {
+					metrics.active.Dec()
+				}
+			}()
+
+			exporter.once.Do(exporter.runProbe)
+			if metrics != nil {
+				result := "failure"
+				if exporter.success {
+					result = "success"
+				}
+				metrics.total.WithLabelValues(result).Inc()
 			}
-			metrics.total.WithLabelValues(result).Inc()
-		}
+		}()
 
 		registry := prometheus.NewRegistry()
 		registry.MustRegister(exporter)
@@ -379,19 +389,24 @@ func parseDefaultTimeout(value string) (time.Duration, error) {
 	return timeout, nil
 }
 
-func main() {
-	config, err := getConfig()
-	if err != nil {
-		slog.Error("Invalid configuration", "error", err)
-		os.Exit(1)
-	}
-
-	slog.Info("Starting server", "version", Version, "address", config.ListenAddress)
-
+func newHandler(config Config, registerer prometheus.Registerer, gatherer prometheus.Gatherer) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/probe", probeHandler(config, newProbeMetrics(prometheus.DefaultRegisterer)))
+	metricsHandler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
+	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(registerer, metricsHandler))
+	mux.HandleFunc("/probe", probeHandler(config, newProbeMetrics(registerer)))
+	mux.HandleFunc("/-/healthy", healthHandler)
+	mux.HandleFunc("/-/ready", healthHandler)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
 			<head><title>SSL pubkey fingerprint exporter</title></head>
 			<body>
@@ -400,34 +415,81 @@ func main() {
 			<p><a href="/probe?target=example.com:443">Probe example.com:443 for SSL pubkey fingerprint metrics</a></p>
 			<p><a href='/metrics'>Metrics</a></p>
 			</body>
-			</html>`, Version)))
+			</html>`, html.EscapeString(Version))))
 	})
+	return mux
+}
 
-	server := &http.Server{
-		Addr:              config.ListenAddress,
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte("OK\n"))
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+func newServer(config Config, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              config.ListenAddress,
+		Handler:           handler,
+		ReadTimeout:       10 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 << 10,
+	}
+}
 
+func serve(ctx context.Context, server *http.Server, listener net.Listener) error {
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- server.ListenAndServe()
+		errCh <- server.Serve(listener)
 	}()
 
 	select {
 	case err := <-errCh:
-		slog.Error("Server failed", "error", err)
-		os.Exit(1)
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
 	case <-ctx.Done():
 		slog.Info("Shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			slog.Error("Graceful shutdown failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("graceful shutdown failed: %w", err)
 		}
+		err := <-errCh
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	}
+}
+
+func run(ctx context.Context, config Config) error {
+	listener, err := net.Listen("tcp", config.ListenAddress)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", config.ListenAddress, err)
+	}
+	handler := newHandler(config, prometheus.DefaultRegisterer, prometheus.DefaultGatherer)
+	return serve(ctx, newServer(config, handler), listener)
+}
+
+func main() {
+	config, err := getConfig()
+	if err != nil {
+		slog.Error("Invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("Starting server", "version", Version, "address", config.ListenAddress)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := run(ctx, config); err != nil {
+		slog.Error("Server failed", "error", err)
+		os.Exit(1)
 	}
 }
