@@ -1,0 +1,6 @@
+.git
+.github
+helm
+*.md
+Makefile
+Dockerfile.release

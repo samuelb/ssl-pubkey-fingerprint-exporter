@@ -11,11 +11,7 @@ GOHOSTARCH ?= $(shell $(GO) env GOHOSTARCH)
 DOCKER            ?= docker
 DOCKER_REPO       ?= basa
 DOCKER_IMAGE_NAME ?= ssl-pubkey-fingerprint-exporter
-DOCKER_ARCH       ?= linux/amd64
-
 SHA256SUM         ?= sha256sum
-
-GIT_COMMIT ?= $(shell git rev-parse --short HEAD)
 
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
@@ -41,7 +37,6 @@ $(PLATFORMS):
 docker:
 	$(DOCKER) build \
 		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		-t $(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(VERSION) .
 
 release: test $(PLATFORMS)

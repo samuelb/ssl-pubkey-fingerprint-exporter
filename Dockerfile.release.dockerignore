@@ -1,0 +1,4 @@
+**
+!Dockerfile.release
+!dist/
+!dist/ssl-pubkey-fingerprint-exporter-*
