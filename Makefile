@@ -31,7 +31,8 @@ build: $(GOHOSTOS)/$(GOHOSTARCH)
 build-all: $(PLATFORMS)
 
 test:
-	$(GO) test
+	$(GO) vet ./...
+	$(GO) test -race ./...
 
 $(PLATFORMS):
 	CGO_ENABLED=0 GOOS=$(_OS) GOARCH=$(_ARCH) $(GO) build $(LDFLAGS) \
