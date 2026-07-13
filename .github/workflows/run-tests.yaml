@@ -107,10 +107,14 @@ jobs:
           --set image.pullPolicy=Never
           --wait --timeout 120s
       - name: Probe the Kubernetes API server through the exporter
+        # Run to completion and read the logs afterwards; kubectl run
+        # --attach races against short-lived containers and can miss
+        # their output entirely.
         run: |
-          kubectl run probe --image=curlimages/curl --restart=Never --attach --rm --command -- \
-            curl -sf 'http://test-spki-fingerprint-exporter:3000/probe?target=kubernetes.default.svc:443' \
-            | tee probe.out
+          kubectl run probe --image=curlimages/curl --restart=Never --command -- \
+            curl -sf 'http://test-spki-fingerprint-exporter:3000/probe?target=kubernetes.default.svc:443'
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/probe --timeout=60s
+          kubectl logs probe | tee probe.out
           grep -q 'probe_success 1' probe.out
       - name: Print exporter state on failure
         if: failure()
@@ -118,6 +122,8 @@ jobs:
           kubectl get pods -o wide
           kubectl describe deployment test-spki-fingerprint-exporter
           kubectl logs deployment/test-spki-fingerprint-exporter --all-containers || true
+          kubectl describe pod probe || true
+          kubectl logs probe || true
 
   govulncheck:
     name: Govulncheck
