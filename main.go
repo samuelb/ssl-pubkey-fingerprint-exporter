@@ -33,6 +33,22 @@ var (
 	// Default configuration
 	defaultListenAddress = ":3000"
 	defaultTimeout       = 10 * time.Second
+
+	// schemePorts maps URL schemes to their default ports. A static map is
+	// used instead of net.LookupPort because the latter depends on
+	// /etc/services, which does not exist in minimal container images.
+	schemePorts = map[string]string{
+		"https":       "443",
+		"smtps":       "465",
+		"submissions": "465",
+		"nntps":       "563",
+		"ldaps":       "636",
+		"domain-s":    "853",
+		"ftps":        "990",
+		"imaps":       "993",
+		"pop3s":       "995",
+		"sips":        "5061",
+	}
 )
 
 type Config struct {
@@ -107,15 +123,14 @@ func parseTarget(target string) (parsedTarget string, err error) {
 
 	port := u.Port()
 	if port == "" {
-		if u.Scheme != "" {
-			p, err := net.LookupPort("tcp", u.Scheme)
-			if err != nil {
-				return "", fmt.Errorf("failed to lookup port for scheme %s: %w", u.Scheme, err)
-			}
-			port = strconv.Itoa(p)
-		} else {
+		if u.Scheme == "" {
 			return "", errors.New("protocol scheme or port number is required")
 		}
+		p, ok := schemePorts[u.Scheme]
+		if !ok {
+			return "", fmt.Errorf("unknown default port for scheme %s, specify the port explicitly", u.Scheme)
+		}
+		port = p
 	}
 
 	return u.Hostname() + ":" + port, nil
