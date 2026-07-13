@@ -26,6 +26,7 @@ import (
 	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
+	"github.com/prometheus/exporter-toolkit/web"
 )
 
 var (
@@ -80,6 +81,7 @@ type Config struct {
 	MaxConcurrentProbes int
 	LogLevel            slog.Level
 	LogFormat           string
+	WebConfigFile       string
 }
 
 type Exporter struct {
@@ -371,6 +373,8 @@ func getConfig() (Config, error) {
 		config.MaxConcurrentProbes = maxConcurrent
 	}
 
+	config.WebConfigFile = os.Getenv("WEB_CONFIG_FILE")
+
 	if value := os.Getenv("LOG_LEVEL"); value != "" {
 		if err := config.LogLevel.UnmarshalText([]byte(value)); err != nil {
 			return Config{}, fmt.Errorf("LOG_LEVEL must be debug, info, warn, or error, got %q", value)
@@ -474,10 +478,14 @@ func newServer(config Config, handler http.Handler) *http.Server {
 	}
 }
 
-func serve(ctx context.Context, server *http.Server, listener net.Listener) error {
+func serve(ctx context.Context, server *http.Server, listener net.Listener, webConfigFile string) error {
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- server.Serve(listener)
+		// With an empty config file path this is a plain HTTP server;
+		// otherwise the exporter-toolkit enables TLS and/or basic auth
+		// as configured.
+		flags := &web.FlagConfig{WebConfigFile: &webConfigFile}
+		errCh <- web.Serve(listener, server, flags, slog.Default())
 	}()
 
 	select {
@@ -507,7 +515,7 @@ func run(ctx context.Context, config Config) error {
 		return fmt.Errorf("failed to listen on %s: %w", config.ListenAddress, err)
 	}
 	handler := newHandler(config, prometheus.DefaultRegisterer, prometheus.DefaultGatherer)
-	return serve(ctx, newServer(config, handler), listener)
+	return serve(ctx, newServer(config, handler), listener, config.WebConfigFile)
 }
 
 func main() {

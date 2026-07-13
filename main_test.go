@@ -9,12 +9,15 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestParseTarget(t *testing.T) {
@@ -113,6 +116,7 @@ func TestGetConfig(t *testing.T) {
 		maxConcurrent  string
 		logLevel       string
 		logFormat      string
+		webConfigFile  string
 		want           Config
 		shouldError    bool
 	}{
@@ -162,6 +166,18 @@ func TestGetConfig(t *testing.T) {
 				LogFormat:           "json",
 			},
 		},
+		{
+			name:          "web config file",
+			webConfigFile: "/etc/exporter/web.yml",
+			want: Config{
+				ListenAddress:       defaultListenAddress,
+				DefaultTimeout:      defaultTimeout,
+				MaxConcurrentProbes: defaultMaxConcurrent,
+				LogLevel:            slog.LevelInfo,
+				LogFormat:           defaultLogFormat,
+				WebConfigFile:       "/etc/exporter/web.yml",
+			},
+		},
 		{name: "invalid timeout", defaultTimeout: "later", shouldError: true},
 		{name: "zero timeout", defaultTimeout: "0", shouldError: true},
 		{name: "negative timeout", defaultTimeout: "-1s", shouldError: true},
@@ -180,6 +196,7 @@ func TestGetConfig(t *testing.T) {
 			t.Setenv("MAX_CONCURRENT_PROBES", test.maxConcurrent)
 			t.Setenv("LOG_LEVEL", test.logLevel)
 			t.Setenv("LOG_FORMAT", test.logFormat)
+			t.Setenv("WEB_CONFIG_FILE", test.webConfigFile)
 
 			config, err := getConfig()
 			if test.shouldError {
@@ -439,6 +456,61 @@ func TestRootEscapesVersion(t *testing.T) {
 	}
 }
 
+func TestServeWebConfigBasicAuth(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("secret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+	webConfigFile := filepath.Join(t.TempDir(), "web.yml")
+	webConfig := "basic_auth_users:\n  admin: " + string(hash) + "\n"
+	if err := os.WriteFile(webConfigFile, []byte(webConfig), 0o600); err != nil {
+		t.Fatalf("failed to write web config: %v", err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	server := newServer(Config{}, http.NewServeMux())
+	go func() {
+		done <- serve(ctx, server, listener, webConfigFile)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("serve returned an error: %v", err)
+		}
+	})
+
+	baseURL := "http://" + listener.Addr().String()
+
+	resp, err := http.Get(baseURL + "/")
+	if err != nil {
+		t.Fatalf("request without credentials failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status without credentials = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.SetBasicAuth("admin", "secret")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request with credentials failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status with credentials = %d, want %d (empty mux)", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
 func TestServeGracefulShutdown(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -449,7 +521,7 @@ func TestServeGracefulShutdown(t *testing.T) {
 	done := make(chan error, 1)
 	server := newServer(Config{}, http.NewServeMux())
 	go func() {
-		done <- serve(ctx, server, listener)
+		done <- serve(ctx, server, listener, "")
 	}()
 
 	cancel()

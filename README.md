@@ -35,6 +35,7 @@ the URL scheme (`https`, `smtps`, `submissions`, `nntps`, `ldaps`, `domain-s`,
 | `MAX_CONCURRENT_PROBES` | Maximum simultaneous outbound TLS probes | `64` |
 | `LOG_LEVEL` | Log level: `debug`, `info`, `warn`, or `error` | `info` |
 | `LOG_FORMAT` | Log format: `text` or `json` | `text` |
+| `WEB_CONFIG_FILE` | Path to an [exporter-toolkit web config](https://github.com/prometheus/exporter-toolkit/blob/master/docs/web-configuration.md) enabling TLS and/or basic auth on the listener | unset |
 
 Invalid or non-positive timeout values are a configuration error at startup,
 not a silent fallback.
