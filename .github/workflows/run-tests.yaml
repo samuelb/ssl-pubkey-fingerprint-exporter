@@ -80,6 +80,45 @@ jobs:
           --set ingress.hosts[0].host=example.test
           --set ingress.hosts[0].paths[0]=/
 
+  chart-install:
+    name: Chart install test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build linux/amd64 binary
+        run: make linux/amd64
+      - name: Build image
+        run: >-
+          docker build -f Dockerfile.release
+          --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64
+          -t spki-fingerprint-exporter:ci .
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+      - name: Load image into kind
+        run: kind load docker-image spki-fingerprint-exporter:ci --name chart-testing
+      - name: Install chart
+        run: >-
+          helm install test ./helm
+          --set image.repository=spki-fingerprint-exporter
+          --set-string image.tag=ci
+          --set image.pullPolicy=Never
+          --wait --timeout 120s
+      - name: Probe the Kubernetes API server through the exporter
+        run: |
+          kubectl run probe --image=curlimages/curl --restart=Never --attach --rm --command -- \
+            curl -sf 'http://test-spki-fingerprint-exporter:3000/probe?target=kubernetes.default.svc:443' \
+            | tee probe.out
+          grep -q 'probe_success 1' probe.out
+      - name: Print exporter state on failure
+        if: failure()
+        run: |
+          kubectl get pods -o wide
+          kubectl describe deployment test-spki-fingerprint-exporter
+          kubectl logs deployment/test-spki-fingerprint-exporter --all-containers || true
+
   govulncheck:
     name: Govulncheck
     runs-on: ubuntu-latest
