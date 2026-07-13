@@ -107,15 +107,32 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.18.4
       - name: Build for all platforms and create checksums
         run: make checksums
+      - name: Validate and package Helm chart
+        run: |
+          helm lint --strict ./helm
+          helm template release ./helm
+          helm template release ./helm \
+            --set serviceMonitor.enabled=true \
+            --set-string serviceMonitor.targets[0]=example.com:443
+          helm package ./helm --destination dist
+          sha256sum dist/*.tgz | sed 's|dist/||' >> dist/sha256sums.txt
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binaries
           path: |
-            dist/ssl-pubkey-fingerprint-exporter-*
+            dist/ssl-pubkey-fingerprint-exporter-linux-*
+            dist/ssl-pubkey-fingerprint-exporter-netbsd-*
+            dist/ssl-pubkey-fingerprint-exporter-openbsd-*
+            dist/ssl-pubkey-fingerprint-exporter-windows-*
+            dist/ssl-pubkey-fingerprint-exporter-darwin-*
             dist/sha256sums.txt
+            dist/*.tgz
 
   release:
     name: Create Release
@@ -137,8 +154,13 @@ jobs:
           tag_name: ${{ needs.version.outputs.tag }}
           body_path: RELEASE_NOTES.md
           files: |
-            dist/ssl-pubkey-fingerprint-exporter-*
+            dist/ssl-pubkey-fingerprint-exporter-linux-*
+            dist/ssl-pubkey-fingerprint-exporter-netbsd-*
+            dist/ssl-pubkey-fingerprint-exporter-openbsd-*
+            dist/ssl-pubkey-fingerprint-exporter-windows-*
+            dist/ssl-pubkey-fingerprint-exporter-darwin-*
             dist/sha256sums.txt
+            dist/*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

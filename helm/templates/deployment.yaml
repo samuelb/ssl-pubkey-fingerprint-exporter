@@ -1,3 +1,8 @@
+{{- range .Values.env }}
+{{- if eq (index . "name") "LISTEN_ADDRESS" }}
+{{- fail "LISTEN_ADDRESS is managed by containerPort and must not be set in env" }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,8 +36,14 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.env }}
           env:
+            - name: LISTEN_ADDRESS
+              {{- if and (contains ":" .Values.listenHost) (not (hasPrefix "[" .Values.listenHost)) }}
+              value: {{ printf "[%s]:%v" .Values.listenHost .Values.containerPort | quote }}
+              {{- else }}
+              value: {{ printf "%s:%v" .Values.listenHost .Values.containerPort | quote }}
+              {{- end }}
+          {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
@@ -41,11 +52,11 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: {{ .Values.healthProbes.livenessPath }}
               port: http
           readinessProbe:
             httpGet:
-              path: /
+              path: {{ .Values.healthProbes.readinessPath }}
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

@@ -8,6 +8,7 @@ your SSL certificates.
 - [Building](#building)
 - [Configuration](#configuration)
 - [Docker](#docker)
+- [Helm](#helm)
 - [Testing](#testing-with-curl)
 - [Metrics](#metrics)
 - [Prometheus](#prometheus)
@@ -33,7 +34,7 @@ Releases are fully automated: trigger the *Release* workflow from the
 GitHub Actions tab (optionally overriding the version bump level). The
 workflow derives the next version from the conventional commits since
 the last stable tag, updates `CHANGELOG.md` and the Helm chart version,
-creates the tag and GitHub release with binaries, and pushes the
+creates the tag and GitHub release with binaries and a packaged chart, and pushes the
 multi-arch Docker images.
 
 ## Configuration
@@ -54,6 +55,29 @@ configuration error rather than silently falling back to the default.
 docker pull basa/ssl-pubkey-fingerprint-exporter
 docker run -p 3000:3000 basa/ssl-pubkey-fingerprint-exporter
 ```
+
+## Helm
+
+Install the chart directly from the repository:
+
+```bash
+helm install ssl-pubkey-fingerprint-exporter ./helm
+```
+
+To create a ServiceMonitor, provide at least one probe target:
+
+```bash
+helm install ssl-pubkey-fingerprint-exporter ./helm \
+  --set serviceMonitor.enabled=true \
+  --set-string serviceMonitor.targets[0]=example.com:443
+```
+
+Packaged chart archives are also attached to GitHub releases. Set
+`containerPort` to change both the declared container port and the exporter's
+`LISTEN_ADDRESS`; do not add `LISTEN_ADDRESS` to `env` separately. Use
+`listenHost` to bind a specific interface without duplicating the port. When
+pinning an exporter image from before the health endpoints were introduced,
+set both `healthProbes.livenessPath` and `healthProbes.readinessPath` to `/`.
 
 ## Testing with curl
 

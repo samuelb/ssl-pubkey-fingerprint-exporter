@@ -16,14 +16,22 @@ service:
   type: ClusterIP
   port: 3000
 
-# Port the exporter listens on inside the container. Keep in sync with
-# the LISTEN_ADDRESS environment variable if you override it.
+# Port the exporter listens on inside the container. The chart derives the
+# LISTEN_ADDRESS environment variable from this value.
 containerPort: 3000
+
+# Optional interface/address to bind. The container port is always appended.
+listenHost: ""
+
+healthProbes:
+  livenessPath: /-/healthy
+  readinessPath: /-/ready
 
 # Additional environment variables for the exporter container, e.g.:
 # env:
 #   - name: DEFAULT_TIMEOUT
 #     value: "10"
+# LISTEN_ADDRESS is managed by the chart and must not be repeated here.
 env: []
 
 podSecurityContext:
@@ -60,7 +68,8 @@ ingress:
     # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
-      paths: []
+      paths:
+        - /
 
   tls: []
   #  - secretName: chart-example-tls
