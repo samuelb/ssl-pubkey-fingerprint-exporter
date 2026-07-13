@@ -11,6 +11,7 @@ your SSL certificates.
 - [Testing](#testing-with-curl)
 - [Metrics](#metrics)
 - [Prometheus](#prometheus)
+- [Security considerations](#security-considerations)
 - [Getting the SHA-256 fingerprint](#getting-the-sha-256-fingerprint)
 
 ## Features
@@ -62,7 +63,25 @@ The response will be in Prometheus metrics format, showing the SSL certificate's
 # HELP ssl_pubkey_fingerprint SSL certificate publickey SHA-256 fingerprint
 # TYPE ssl_pubkey_fingerprint gauge
 ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey=",target="example.com:443"} 1
+# HELP probe_success Displays whether or not the probe was a success
+# TYPE probe_success gauge
+probe_success 1
+# HELP probe_duration_seconds Returns how long the probe took to complete in seconds
+# TYPE probe_duration_seconds gauge
+probe_duration_seconds 0.042
 ```
+
+`probe_success` is `0` when the target could not be probed (unreachable
+host, TLS handshake failure, invalid target), so alerts can distinguish
+a changed fingerprint from a failed probe.
+
+### Targets
+
+Targets can be given as `host:port` or as a URL. When no port is
+specified, it is derived from the URL scheme. Supported schemes:
+`https`, `smtps`, `submissions`, `nntps`, `ldaps`, `domain-s`, `ftps`,
+`imaps`, `pop3s` and `sips`. For other protocols, specify the port
+explicitly.
 
 ## Prometheus
 
@@ -84,10 +103,24 @@ scrape_configs:
         replacement: ssl-pubkey-fingerprint-exporter:3000
 ```
 
-### Example PromQL query
+### Example PromQL queries
+
+Alert when the fingerprint changed:
 ```
 absent(ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey",target="example.com:443"})
 ```
+
+Alert when the probe failed:
+```
+probe_success == 0
+```
+
+## Security considerations
+
+The `/probe` endpoint opens a TCP/TLS connection to any `host:port` a
+caller supplies, as is common for blackbox-style exporters. Do not
+expose the exporter to untrusted networks (e.g. via a public ingress);
+restrict access to your Prometheus servers.
 
 ## Getting the SHA-256 fingerprint
 
