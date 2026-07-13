@@ -13,8 +13,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -247,9 +249,10 @@ func main() {
 
 	slog.Info("Starting server", "version", Version, "address", config.ListenAddress)
 
-	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/probe", probeHandler(config))
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/probe", probeHandler(config))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
 			<head><title>SSL pubkey fingerprint exporter</title></head>
 			<body>
@@ -261,8 +264,31 @@ func main() {
 			</html>`, Version)))
 	})
 
-	if err := http.ListenAndServe(config.ListenAddress, nil); err != nil {
+	server := &http.Server{
+		Addr:              config.ListenAddress,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
 		slog.Error("Server failed", "error", err)
 		os.Exit(1)
+	case <-ctx.Done():
+		slog.Info("Shutting down")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("Graceful shutdown failed", "error", err)
+			os.Exit(1)
+		}
 	}
 }
