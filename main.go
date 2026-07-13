@@ -30,6 +30,18 @@ var (
 		[]string{"fingerprint", "target"}, nil,
 	)
 
+	probeSuccess = prometheus.NewDesc(
+		"probe_success",
+		"Displays whether or not the probe was a success",
+		nil, nil,
+	)
+
+	probeDuration = prometheus.NewDesc(
+		"probe_duration_seconds",
+		"Returns how long the probe took to complete in seconds",
+		nil, nil,
+	)
+
 	// Default configuration
 	defaultListenAddress = ":3000"
 	defaultTimeout       = 10 * time.Second
@@ -63,16 +75,34 @@ type Exporter struct {
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- pubkeyFingerprint
+	ch <- probeSuccess
+	ch <- probeDuration
 }
 
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
+	start := time.Now()
+	success := e.probe(ch)
+	ch <- prometheus.MustNewConstMetric(
+		probeDuration, prometheus.GaugeValue, time.Since(start).Seconds(),
+	)
+
+	successValue := 0.0
+	if success {
+		successValue = 1
+	}
+	ch <- prometheus.MustNewConstMetric(
+		probeSuccess, prometheus.GaugeValue, successValue,
+	)
+}
+
+func (e *Exporter) probe(ch chan<- prometheus.Metric) bool {
 	target, err := parseTarget(e.target)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"target": e.target,
 			"error":  err,
 		}).Error("Failed to parse target")
-		return
+		return false
 	}
 
 	fingerprint, err := getFingerprint(target, e.timeout)
@@ -81,12 +111,13 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			"target": target,
 			"error":  err,
 		}).Error("Failed to get publickey fingerprint")
-		return
+		return false
 	}
 
 	ch <- prometheus.MustNewConstMetric(
 		pubkeyFingerprint, prometheus.GaugeValue, 1, fingerprint, target,
 	)
+	return true
 }
 
 func getFingerprint(target string, timeout time.Duration) (string, error) {
