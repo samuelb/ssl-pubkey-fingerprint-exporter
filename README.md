@@ -1,148 +1,76 @@
 # SPKI fingerprint exporter
 
-Prometheus exporter for monitoring the SHA-256 fingerprints of the Subject
-Public Key Info (SPKI) in certificates presented by TLS services.
+Prometheus exporter that reports the SHA-256 fingerprint of the Subject Public
+Key Info (SPKI) in certificates presented by TLS services.
 
 > [!NOTE]
-> This project was previously named
+> Previously named
 > [`ssl-pubkey-fingerprint-exporter`](https://github.com/samuelb/ssl-pubkey-fingerprint-exporter).
-> GitHub redirects links using that old repository name here, and releases
-> continue to publish `basa/ssl-pubkey-fingerprint-exporter` as a compatibility
-> alias for the renamed Docker image.
+> GitHub redirects old links, and releases still publish
+> `basa/ssl-pubkey-fingerprint-exporter` as a Docker image alias.
 
-## Table of Contents
-- [Features](#features)
-- [Building](#building)
-- [Configuration](#configuration)
-- [Docker](#docker)
-- [Helm](#helm)
-- [Testing](#testing-with-curl)
-- [Metrics](#metrics)
-- [Prometheus](#prometheus)
-- [Security considerations](#security-considerations)
-- [Getting the SHA-256 fingerprint](#getting-the-sha-256-fingerprint)
+## Usage
 
-## Features
-- Monitor TLS certificate SPKI fingerprints
-- Support for both domain:port and full URL targets
-- Configurable timeout via environment variables
-- Docker support
-- Prometheus integration
-
-## Building
+```bash
+docker run -p 3000:3000 basa/spki-fingerprint-exporter
+curl "http://localhost:3000/probe?target=example.com:443"
 ```
-make
-```
-The created binaries will end up in the folder `dist/`.
 
-## Releasing
+Or build from source with `make` (binaries land in `dist/`).
 
-Releases are fully automated: trigger the *Release* workflow from the
-GitHub Actions tab (optionally overriding the version bump level). The
-workflow derives the next version from the conventional commits since
-the last stable tag, updates `CHANGELOG.md` and the Helm chart version,
-creates the tag and GitHub release with binaries and a packaged chart, and pushes the
-multi-arch Docker images.
+Targets are `host:port` or a URL. Without an explicit port, it is derived from
+the URL scheme (`https`, `smtps`, `submissions`, `nntps`, `ldaps`, `domain-s`,
+`ftps`, `imaps`, `pop3s`, `sips`); other protocols need the port spelled out.
 
 ## Configuration
-
-The exporter can be configured using environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LISTEN_ADDRESS` | Address to listen on | `:3000` |
-| `DEFAULT_TIMEOUT` | Default timeout as integer seconds or a Go duration such as `750ms` or `15s` | `10` |
-| `MAX_CONCURRENT_PROBES` | Maximum number of simultaneous outbound TLS probes | `64` |
+| `DEFAULT_TIMEOUT` | Probe timeout: integer seconds or a Go duration (`750ms`, `15s`) | `10` |
+| `MAX_CONCURRENT_PROBES` | Maximum simultaneous outbound TLS probes | `64` |
 
-Invalid or non-positive timeout values cause the exporter to exit with a
-configuration error rather than silently falling back to the default.
-
-## Docker
-```
-docker pull basa/spki-fingerprint-exporter
-docker run -p 3000:3000 basa/spki-fingerprint-exporter
-```
+Invalid or non-positive timeout values are a configuration error at startup,
+not a silent fallback.
 
 ## Helm
-
-Install the chart directly from the repository:
 
 ```bash
 helm install spki-fingerprint-exporter ./helm
 ```
 
-To create a ServiceMonitor, provide at least one probe target:
+Add `--set serviceMonitor.enabled=true --set-string serviceMonitor.targets[0]=example.com:443`
+to create a ServiceMonitor. Packaged charts are attached to GitHub releases.
 
-```bash
-helm install spki-fingerprint-exporter ./helm \
-  --set serviceMonitor.enabled=true \
-  --set-string serviceMonitor.targets[0]=example.com:443
-```
-
-Packaged chart archives are also attached to GitHub releases. Set
-`containerPort` to change both the declared container port and the exporter's
-`LISTEN_ADDRESS`; do not add `LISTEN_ADDRESS` to `env` separately. Use
-`listenHost` to bind a specific interface without duplicating the port. When
-pinning an exporter image from before the health endpoints were introduced,
-set both `healthProbes.livenessPath` and `healthProbes.readinessPath` to `/`.
-
-## Testing with curl
-
-You can test the exporter using curl to make HTTP requests to the probe endpoint:
-
-```bash
-# Test with a domain and port
-curl "http://localhost:3000/probe?target=example.com:443"
-
-# Test with a custom listen address
-LISTEN_ADDRESS=:8080 ./spki-fingerprint-exporter
-curl "http://localhost:8080/probe?target=example.com:443"
-```
+Notes:
+- `containerPort` sets both the container port and `LISTEN_ADDRESS`; do not add
+  `LISTEN_ADDRESS` to `env` separately. Use `listenHost` to bind an interface.
+- For exporter images predating the health endpoints, set
+  `healthProbes.livenessPath` and `healthProbes.readinessPath` to `/`.
 
 ## Metrics
 
-The response is in Prometheus metrics format and includes the TLS certificate's
-SPKI fingerprint.
+`/probe?target=example.com:443` returns:
 
 ```
-# HELP spki_fingerprint TLS certificate Subject Public Key Info (SPKI) SHA-256 fingerprint.
-# TYPE spki_fingerprint gauge
 spki_fingerprint{fingerprint="base64encodedsha256sumofspki=",target="example.com:443"} 1
-# HELP probe_success Displays whether or not the probe was a success
-# TYPE probe_success gauge
 probe_success 1
-# HELP probe_duration_seconds Returns how long the probe took to complete in seconds
-# TYPE probe_duration_seconds gauge
 probe_duration_seconds 0.042
 ```
 
-`probe_success` is `0` when the target could not be probed (unreachable
-host, TLS handshake failure, invalid target), so alerts can distinguish
-a changed fingerprint from a failed probe.
+`probe_success` is `0` when the probe failed (unreachable host, TLS handshake
+failure, invalid target), so alerts can distinguish a changed fingerprint from
+a failed probe.
 
-The exporter also exposes operational metrics on `/metrics`:
+`/metrics` exposes operational metrics: `spki_fingerprint_exporter_active_probes`,
+`spki_fingerprint_exporter_probes_total{result="success|failure"}`, and
+`spki_fingerprint_exporter_rejected_probes_total`. Probes above
+`MAX_CONCURRENT_PROBES` receive HTTP 503.
 
-- `spki_fingerprint_exporter_active_probes`
-- `spki_fingerprint_exporter_probes_total{result="success|failure"}`
-- `spki_fingerprint_exporter_rejected_probes_total`
-
-Requests above `MAX_CONCURRENT_PROBES` receive HTTP 503 so overload is visible
-to Prometheus instead of creating an unbounded number of outbound connections.
-
-The `/-/healthy` and `/-/ready` endpoints return HTTP 200 while the exporter is
-running and can be used by container orchestrators.
-
-### Targets
-
-Targets can be given as `host:port` or as a URL. When no port is
-specified, it is derived from the URL scheme. Supported schemes:
-`https`, `smtps`, `submissions`, `nntps`, `ldaps`, `domain-s`, `ftps`,
-`imaps`, `pop3s` and `sips`. For other protocols, specify the port
-explicitly.
+`/-/healthy` and `/-/ready` return HTTP 200 for container orchestrators.
 
 ## Prometheus
 
-### Scrape configuration
 ```yaml
 scrape_configs:
   - job_name: "spki-fingerprint-exporter"
@@ -160,42 +88,43 @@ scrape_configs:
         replacement: spki-fingerprint-exporter:3000
 ```
 
-### Example PromQL queries
+Alert when the fingerprint changed (gated on `probe_success` so it only fires
+on an unexpected fingerprint, not an unreachable target):
 
-Alert when the fingerprint changed. The expression is gated on
-`probe_success` so it only fires when the probe succeeded but returned
-an unexpected fingerprint, not when the target was unreachable:
 ```
 probe_success{instance="example.com:443"} == 1
 unless on(instance)
 spki_fingerprint{fingerprint="base64encodedsha256sumofspki="}
 ```
 
-Alert when the probe failed:
-```
-probe_success == 0
-```
+Alert when the probe failed: `probe_success == 0`
 
 ## Security considerations
 
-The `/probe` endpoint opens a TCP/TLS connection to any `host:port` a
-caller supplies, as is common for blackbox-style exporters. Do not
-expose the exporter to untrusted networks (e.g. via a public ingress);
-restrict access to your Prometheus servers.
+`/probe` opens a TLS connection to any `host:port` a caller supplies, as is
+common for blackbox-style exporters. Do not expose the exporter to untrusted
+networks; restrict access to your Prometheus servers.
 
 ## Getting the SHA-256 fingerprint
 
-Extract the SPKI SHA-256 fingerprint from a PEM-encoded certificate file
+From a PEM certificate:
 ```sh
 openssl x509 -pubkey -noout -in certificate.pem | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
 ```
 
-Extract the SPKI SHA-256 fingerprint from a private key file
+From a private key:
 ```sh
 openssl rsa -in certificate.key -pubout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
 ```
 
-Extract the SPKI SHA-256 fingerprint from an HTTPS server
+From a live server:
 ```sh
 servername=example.com; echo Q | openssl s_client -connect $servername:443 -servername $servername | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
 ```
+
+## Releasing
+
+Trigger the *Release* workflow from the GitHub Actions tab (optionally
+overriding the bump level). It derives the version from conventional commits,
+updates `CHANGELOG.md` and the chart version, tags, publishes binaries and the
+packaged chart, and pushes multi-arch Docker images.
