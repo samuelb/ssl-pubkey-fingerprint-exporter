@@ -11,14 +11,16 @@ GOHOSTARCH ?= $(shell $(GO) env GOHOSTARCH)
 DOCKER            ?= docker
 DOCKER_REPO       ?= basa
 DOCKER_IMAGE_NAME ?= ssl-pubkey-fingerprint-exporter
-SHA256SUM         ?= sha256sum
+SHA256SUM         ?= $(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256)
+
+ARTIFACTS := $(foreach platform,$(PLATFORMS),$(BINARY_DIR)/$(BINARY_NAME)-$(subst /,-,$(platform)))
 
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
 _OS   = $(word 1, $(subst /, ,$@))
 _ARCH = $(word 2, $(subst /, ,$@))
 
-.PHONY: all build test clean build-all
+.PHONY: all build test clean build-all checksums docker release version $(PLATFORMS)
 
 all: build
 
@@ -27,11 +29,11 @@ build: $(GOHOSTOS)/$(GOHOSTARCH)
 build-all: $(PLATFORMS)
 
 test:
-	$(GO) vet ./...
-	$(GO) test -race ./...
+	$(GO) vet $(GOOPTS) ./...
+	$(GO) test $(GOOPTS) -race ./...
 
 $(PLATFORMS):
-	CGO_ENABLED=0 GOOS=$(_OS) GOARCH=$(_ARCH) $(GO) build $(LDFLAGS) \
+	CGO_ENABLED=0 GOOS=$(_OS) GOARCH=$(_ARCH) $(GO) build $(GOOPTS) $(LDFLAGS) \
 		 -o $(BINARY_DIR)/$(BINARY_NAME)-$(_OS)-$(_ARCH)
 
 docker:
@@ -39,8 +41,10 @@ docker:
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(VERSION) .
 
-release: test $(PLATFORMS)
-	$(SHA256SUM) $(BINARY_DIR)/$(BINARY_NAME)* | sed "s|$(BINARY_DIR)/||" > $(BINARY_DIR)/sha256sums.txt
+checksums: build-all
+	$(SHA256SUM) $(ARTIFACTS) | sed "s|$(BINARY_DIR)/||" > $(BINARY_DIR)/sha256sums.txt
+
+release: test checksums
 
 clean:
 	$(GO) clean
