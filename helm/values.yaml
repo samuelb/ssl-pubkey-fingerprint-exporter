@@ -16,6 +16,40 @@ service:
   type: ClusterIP
   port: 3000
 
+# Port the exporter listens on inside the container. Keep in sync with
+# the LISTEN_ADDRESS environment variable if you override it.
+containerPort: 3000
+
+# Additional environment variables for the exporter container, e.g.:
+# env:
+#   - name: DEFAULT_TIMEOUT
+#     value: "10"
+env: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Create a ServiceMonitor for the Prometheus Operator. Each target is
+# probed via the /probe endpoint.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  additionalLabels: {}
+  # targets:
+  #   - example.com:443
+  #   - https://example.org
+  targets: []
+
 ingress:
   enabled: false
   annotations: {}
