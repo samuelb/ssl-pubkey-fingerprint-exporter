@@ -376,6 +376,23 @@ func TestHTTPRoutes(t *testing.T) {
 	}
 }
 
+func TestBuildInfoMetric(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	handler := newHandler(
+		Config{DefaultTimeout: time.Second, MaxConcurrentProbes: 1},
+		registry,
+		registry,
+	)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(w.Body.String(), `spki_fingerprint_exporter_build_info{`) {
+		t.Errorf("metrics should contain build_info, got:\n%s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `version="dev"`) {
+		t.Errorf("build_info should carry the version label, got:\n%s", w.Body.String())
+	}
+}
+
 func TestRootEscapesVersion(t *testing.T) {
 	originalVersion := Version
 	Version = `<script>alert("version")</script>`

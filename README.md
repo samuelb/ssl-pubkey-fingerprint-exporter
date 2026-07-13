@@ -68,8 +68,9 @@ failure, invalid target), so alerts can distinguish a changed fingerprint from
 a failed probe.
 
 `/metrics` exposes operational metrics: `spki_fingerprint_exporter_active_probes`,
-`spki_fingerprint_exporter_probes_total{result="success|failure"}`, and
-`spki_fingerprint_exporter_rejected_probes_total`. Probes above
+`spki_fingerprint_exporter_probes_total{result="success|failure"}`,
+`spki_fingerprint_exporter_rejected_probes_total`, and
+`spki_fingerprint_exporter_build_info`. Probes above
 `MAX_CONCURRENT_PROBES` receive HTTP 503.
 
 `/-/healthy` and `/-/ready` return HTTP 200 for container orchestrators.

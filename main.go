@@ -23,7 +23,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/version"
 )
 
 var (
@@ -390,6 +392,9 @@ func parseDefaultTimeout(value string) (time.Duration, error) {
 }
 
 func newHandler(config Config, registerer prometheus.Registerer, gatherer prometheus.Gatherer) http.Handler {
+	version.Version = Version
+	registerer.MustRegister(versioncollector.NewCollector("spki_fingerprint_exporter"))
+
 	mux := http.NewServeMux()
 	metricsHandler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(registerer, metricsHandler))
