@@ -164,19 +164,32 @@ func parseTarget(target string) (parsedTarget string, err error) {
 		return "", fmt.Errorf("failed to parse URL: %w", err)
 	}
 
+	host := u.Hostname()
+	if host == "" {
+		return "", errors.New("hostname is required")
+	}
+
 	port := u.Port()
 	if port == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", errors.New("port number is empty")
+		}
 		if u.Scheme == "" {
 			return "", errors.New("protocol scheme or port number is required")
 		}
-		p, ok := schemePorts[u.Scheme]
+		p, ok := schemePorts[strings.ToLower(u.Scheme)]
 		if !ok {
 			return "", fmt.Errorf("unknown default port for scheme %s, specify the port explicitly", u.Scheme)
 		}
 		port = p
 	}
 
-	return u.Hostname() + ":" + port, nil
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", fmt.Errorf("invalid port number %q", port)
+	}
+
+	return net.JoinHostPort(host, port), nil
 }
 
 func probeHandler(config Config) http.HandlerFunc {

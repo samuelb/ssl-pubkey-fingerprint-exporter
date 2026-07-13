@@ -15,31 +15,43 @@ import (
 
 func TestParseTarget(t *testing.T) {
 	var tests = []struct {
+		name        string
 		input       string
 		output      string
 		shouldError bool
 	}{
-		{"https://example.com", "example.com:443", false},
-		{"ldaps://example.com", "example.com:636", false},
-		{"https://example.com:1234", "example.com:1234", false},
-		{"example.com:1234", "example.com:1234", false},
-		{"", "", true},
-		{"example.com", "", true},
-		{"//example.com", "", true},
-		{"foobar://example.com", "", true},
+		{"default HTTPS port", "https://example.com", "example.com:443", false},
+		{"case insensitive scheme", "HTTPS://example.com", "example.com:443", false},
+		{"default LDAPS port", "ldaps://example.com", "example.com:636", false},
+		{"explicit URL port", "https://example.com:1234", "example.com:1234", false},
+		{"host and port", "example.com:1234", "example.com:1234", false},
+		{"IPv6 URL", "https://[::1]", "[::1]:443", false},
+		{"IPv6 and port", "[::1]:1234", "[::1]:1234", false},
+		{"empty target", "", "", true},
+		{"missing port", "example.com", "", true},
+		{"missing scheme", "//example.com", "", true},
+		{"unknown scheme", "foobar://example.com", "", true},
+		{"empty host", ":443", "", true},
+		{"URL with empty host", "https://:443", "", true},
+		{"empty port", "https://example.com:", "", true},
+		{"schemeless empty port", "example.com:", "", true},
+		{"zero port", "example.com:0", "", true},
+		{"port too large", "example.com:65536", "", true},
 	}
 
 	for _, test := range tests {
-		res, err := parseTarget(test.input)
-		if res != test.output {
-			t.Errorf("input %q: got %q, should be %q", test.input, res, test.output)
-		}
-		if test.shouldError && err == nil {
-			t.Errorf("input %q didn't error, but it should", test.input)
-		}
-		if !test.shouldError && err != nil {
-			t.Errorf("input %q errored unexpectedly: %v", test.input, err)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			res, err := parseTarget(test.input)
+			if res != test.output {
+				t.Errorf("input %q: got %q, should be %q", test.input, res, test.output)
+			}
+			if test.shouldError && err == nil {
+				t.Errorf("input %q didn't error, but it should", test.input)
+			}
+			if !test.shouldError && err != nil {
+				t.Errorf("input %q errored unexpectedly: %v", test.input, err)
+			}
+		})
 	}
 }
 
