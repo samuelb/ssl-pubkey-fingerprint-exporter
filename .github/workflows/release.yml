@@ -67,17 +67,7 @@ jobs:
     name: Build and Push Docker Images
     needs: [build, release]
     runs-on: ubuntu-latest
-    strategy:
-        matrix:
-          platform:
-            - linux/amd64
-            - linux/arm64
     steps:
-      - name: Prepare
-        run: |
-          platform=${{ matrix.platform }}
-          echo "TARGETOS=${platform/\/*/}" >> $GITHUB_ENV
-          echo "TARGETARCH=${platform/*\//}" >> $GITHUB_ENV
       - uses: actions/checkout@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -100,19 +90,15 @@ jobs:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.release
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            TARGETOS=${{ env.TARGETOS }}
-            TARGETARCH=${{ env.TARGETARCH}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
