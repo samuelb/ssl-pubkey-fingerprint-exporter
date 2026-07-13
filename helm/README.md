@@ -40,6 +40,10 @@ port, it is derived from the URL scheme.
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `nameOverride` | Override the chart name | `""` |
 | `fullnameOverride` | Override the full resource name | `""` |
+| `serviceAccount.create` | Create a dedicated ServiceAccount | `true` |
+| `serviceAccount.name` | ServiceAccount name | generated from the fullname |
+| `serviceAccount.annotations` | ServiceAccount annotations | `{}` |
+| `serviceAccount.automount` | Mount the API token into the pod (the exporter needs no API access) | `false` |
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `3000` |
 | `containerPort` | Port the exporter listens on; also sets `LISTEN_ADDRESS` | `3000` |

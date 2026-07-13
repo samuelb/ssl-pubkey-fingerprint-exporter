@@ -32,6 +32,17 @@ Create chart name and version as used by the chart label.
 {{- end -}}
 
 {{/*
+Name of the ServiceAccount to use.
+*/}}
+{{- define "spki-fingerprint-exporter.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "spki-fingerprint-exporter.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Return the appropriate apiVersion for ingress based on the cluster's
 capabilities, falling back to the legacy APIs on old clusters.
 */}}

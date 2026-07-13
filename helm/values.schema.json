@@ -16,6 +16,17 @@
     },
     "nameOverride": { "type": "string" },
     "fullnameOverride": { "type": "string" },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["create", "annotations", "name", "automount"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "annotations": { "type": "object" },
+        "name": { "type": "string" },
+        "automount": { "type": "boolean" }
+      }
+    },
     "service": {
       "type": "object",
       "additionalProperties": true,

@@ -12,6 +12,17 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  # Create a dedicated ServiceAccount for the exporter.
+  create: true
+  annotations: {}
+  # Name of the ServiceAccount to use. Defaults to the fullname when
+  # create is true, and to "default" otherwise.
+  name: ""
+  # The exporter needs no Kubernetes API access, so the API token is not
+  # mounted into the pod.
+  automount: false
+
 service:
   type: ClusterIP
   port: 3000
