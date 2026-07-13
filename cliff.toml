@@ -1,13 +1,7 @@
-# git-cliff configuration for automated changelogs and version bumps.
+# git-cliff configuration for automated release notes and version bumps.
 # https://git-cliff.org/docs/configuration
 
 [changelog]
-header = """
-# Changelog
-
-All notable changes to this project are documented in this file.
-
-"""
 body = """
 {% if version %}\
 ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}

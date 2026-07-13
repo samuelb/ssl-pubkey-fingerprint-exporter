@@ -126,5 +126,5 @@ servername=example.com; echo Q | openssl s_client -connect $servername:443 -serv
 
 Trigger the *Release* workflow from the GitHub Actions tab (optionally
 overriding the bump level). It derives the version from conventional commits,
-updates `CHANGELOG.md` and the chart version, tags, publishes binaries and the
-packaged chart, and pushes multi-arch Docker images.
+updates the chart version, tags, publishes binaries and the packaged chart
+with generated release notes, and pushes multi-arch Docker images.

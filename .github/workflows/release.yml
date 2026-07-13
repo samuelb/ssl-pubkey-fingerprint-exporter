@@ -3,9 +3,9 @@ name: Release
 # Fully automated release: trigger it manually from the Actions tab and
 # everything else happens automatically. The next version is derived
 # from conventional commits since the last stable tag (override via the
-# bump input), CHANGELOG.md and the Helm chart version are updated and
-# committed, the tag is created, binaries are built and attached to a
-# GitHub release, and multi-arch Docker images are pushed.
+# bump input), the Helm chart version is updated and committed, the tag
+# is created, binaries are built and attached to a GitHub release with
+# generated release notes, and multi-arch Docker images are pushed.
 
 on:
   workflow_dispatch:
@@ -46,7 +46,7 @@ jobs:
         run: make test
 
   version:
-    name: Bump version, changelog and tag
+    name: Bump version and tag
     needs: test
     runs-on: ubuntu-latest
     outputs:
@@ -56,13 +56,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Update changelog and compute next version
+      - name: Compute next version and render release notes
         id: bump
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --bump=${{ inputs.bump }} --output CHANGELOG.md
-      - name: Render release notes
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
@@ -89,7 +84,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md helm/Chart.yaml
+          git add helm/Chart.yaml
           git commit -m "chore(release): ${TAG}"
           git tag "${TAG}"
           git push --atomic origin HEAD "refs/tags/${TAG}"
