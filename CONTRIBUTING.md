@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping improve ssl-pubkey-fingerprint-exporter! Bug reports,
+Thanks for helping improve spki-fingerprint-exporter! Bug reports,
 fixes, features, and documentation are all welcome.
 
 ## Quick start
 
 ```sh
-git clone https://github.com/samuelb/ssl-pubkey-fingerprint-exporter.git
-cd ssl-pubkey-fingerprint-exporter
+git clone https://github.com/samuelb/spki-fingerprint-exporter.git
+cd spki-fingerprint-exporter
 make build
 make test   # go vet + tests with race detector
 ```

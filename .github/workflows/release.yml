@@ -29,7 +29,9 @@ concurrency:
 
 env:
   GO_VERSION: '1.24'
-  DOCKER_IMAGE: 'basa/ssl-pubkey-fingerprint-exporter'
+  DOCKER_IMAGES: |
+    basa/spki-fingerprint-exporter
+    basa/ssl-pubkey-fingerprint-exporter
 
 jobs:
   test:
@@ -126,11 +128,11 @@ jobs:
         with:
           name: binaries
           path: |
-            dist/ssl-pubkey-fingerprint-exporter-linux-*
-            dist/ssl-pubkey-fingerprint-exporter-netbsd-*
-            dist/ssl-pubkey-fingerprint-exporter-openbsd-*
-            dist/ssl-pubkey-fingerprint-exporter-windows-*
-            dist/ssl-pubkey-fingerprint-exporter-darwin-*
+            dist/spki-fingerprint-exporter-linux-*
+            dist/spki-fingerprint-exporter-netbsd-*
+            dist/spki-fingerprint-exporter-openbsd-*
+            dist/spki-fingerprint-exporter-windows-*
+            dist/spki-fingerprint-exporter-darwin-*
             dist/sha256sums.txt
             dist/*.tgz
 
@@ -154,11 +156,11 @@ jobs:
           tag_name: ${{ needs.version.outputs.tag }}
           body_path: RELEASE_NOTES.md
           files: |
-            dist/ssl-pubkey-fingerprint-exporter-linux-*
-            dist/ssl-pubkey-fingerprint-exporter-netbsd-*
-            dist/ssl-pubkey-fingerprint-exporter-openbsd-*
-            dist/ssl-pubkey-fingerprint-exporter-windows-*
-            dist/ssl-pubkey-fingerprint-exporter-darwin-*
+            dist/spki-fingerprint-exporter-linux-*
+            dist/spki-fingerprint-exporter-netbsd-*
+            dist/spki-fingerprint-exporter-openbsd-*
+            dist/spki-fingerprint-exporter-windows-*
+            dist/spki-fingerprint-exporter-darwin-*
             dist/sha256sums.txt
             dist/*.tgz
         env:
@@ -190,7 +192,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ env.DOCKER_IMAGES }}
           # Both v-prefixed and plain tags: the Helm chart defaults the
           # image tag to the plain appVersion.
           tags: |

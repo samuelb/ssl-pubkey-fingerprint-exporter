@@ -5,10 +5,10 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "ssl-pubkey-fingerprint-exporter.fullname" . }}
+  name: {{ include "spki-fingerprint-exporter.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "ssl-pubkey-fingerprint-exporter.name" . }}
-    helm.sh/chart: {{ include "ssl-pubkey-fingerprint-exporter.chart" . }}
+    app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
+    helm.sh/chart: {{ include "spki-fingerprint-exporter.chart" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
     {{- with .Values.serviceMonitor.additionalLabels }}
@@ -17,7 +17,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "ssl-pubkey-fingerprint-exporter.name" . }}
+      app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   endpoints:
     {{- range .Values.serviceMonitor.targets }}

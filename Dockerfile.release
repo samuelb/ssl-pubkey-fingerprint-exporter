@@ -4,16 +4,16 @@ ARG TARGETARCH
 ARG TARGETOS
 
 COPY <<EOT /etc/passwd
-ssl-exporter:x:1000:1000:ssl-exporter:/app:/sbin/nologin
+spki-exporter:x:1000:1000:spki-exporter:/app:/sbin/nologin
 EOT
 
 COPY <<EOT /etc/group
-ssl-exporter:x:1000:
+spki-exporter:x:1000:
 EOT
 
-COPY ./dist/ssl-pubkey-fingerprint-exporter-${TARGETOS}-${TARGETARCH} /ssl-pubkey-fingerprint-exporter
+COPY ./dist/spki-fingerprint-exporter-${TARGETOS}-${TARGETARCH} /spki-fingerprint-exporter
 
 USER 1000:1000
 EXPOSE 3000/tcp
 
-ENTRYPOINT ["/ssl-pubkey-fingerprint-exporter"] 
+ENTRYPOINT ["/spki-fingerprint-exporter"]

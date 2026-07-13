@@ -30,9 +30,9 @@ var (
 	// Version is set during build
 	Version = "dev"
 
-	pubkeyFingerprint = prometheus.NewDesc(
-		"ssl_pubkey_fingerprint",
-		"SSL certificate publickey SHA-256 fingerprint",
+	spkiFingerprint = prometheus.NewDesc(
+		"spki_fingerprint",
+		"TLS certificate Subject Public Key Info (SPKI) SHA-256 fingerprint.",
 		[]string{"fingerprint", "target"}, nil,
 	)
 
@@ -97,17 +97,17 @@ type probeMetrics struct {
 func newProbeMetrics(registerer prometheus.Registerer) *probeMetrics {
 	metrics := &probeMetrics{
 		active: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: "ssl_pubkey_fingerprint_exporter",
+			Namespace: "spki_fingerprint_exporter",
 			Name:      "active_probes",
 			Help:      "Number of TLS probes currently being handled.",
 		}),
 		total: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "ssl_pubkey_fingerprint_exporter",
+			Namespace: "spki_fingerprint_exporter",
 			Name:      "probes_total",
 			Help:      "Total number of completed TLS probes.",
 		}, []string{"result"}),
 		rejected: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: "ssl_pubkey_fingerprint_exporter",
+			Namespace: "spki_fingerprint_exporter",
 			Name:      "rejected_probes_total",
 			Help:      "Total number of probes rejected because the concurrency limit was reached.",
 		}),
@@ -119,7 +119,7 @@ func newProbeMetrics(registerer prometheus.Registerer) *probeMetrics {
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- pubkeyFingerprint
+	ch <- spkiFingerprint
 	ch <- probeSuccess
 	ch <- probeDuration
 }
@@ -128,7 +128,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.once.Do(e.runProbe)
 	if e.success {
 		ch <- prometheus.MustNewConstMetric(
-			pubkeyFingerprint, prometheus.GaugeValue, 1, e.fingerprint, e.parsedTarget,
+			spkiFingerprint, prometheus.GaugeValue, 1, e.fingerprint, e.parsedTarget,
 		)
 	}
 	ch <- prometheus.MustNewConstMetric(
@@ -158,7 +158,7 @@ func (e *Exporter) runProbe() {
 
 	fingerprint, err := getFingerprint(e.ctx, target, e.timeout)
 	if err != nil {
-		slog.Error("Failed to get publickey fingerprint", "target", target, "error", err)
+		slog.Error("Failed to get SPKI fingerprint", "target", target, "error", err)
 		return
 	}
 
@@ -174,7 +174,7 @@ func getFingerprint(ctx context.Context, target string, timeout time.Duration) (
 	dialer := &tls.Dialer{
 		NetDialer: &net.Dialer{},
 		// Certificate chain validation is intentionally skipped: this
-		// exporter fingerprints the presented public key, it does not
+		// exporter fingerprints the presented SPKI, it does not
 		// validate the certificate.
 		Config: &tls.Config{InsecureSkipVerify: true}, // #nosec G402
 	}
@@ -408,11 +408,11 @@ func newHandler(config Config, registerer prometheus.Registerer, gatherer promet
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(fmt.Sprintf(`<html>
-			<head><title>SSL pubkey fingerprint exporter</title></head>
+			<head><title>SPKI fingerprint exporter</title></head>
 			<body>
-			<h1>SSL pubkey fingerprint exporter</h1>
+			<h1>SPKI fingerprint exporter</h1>
 			<p>Version: %s</p>
-			<p><a href="/probe?target=example.com:443">Probe example.com:443 for SSL pubkey fingerprint metrics</a></p>
+			<p><a href="/probe?target=example.com:443">Probe example.com:443 for TLS certificate SPKI fingerprint metrics</a></p>
 			<p><a href='/metrics'>Metrics</a></p>
 			</body>
 			</html>`, html.EscapeString(Version))))

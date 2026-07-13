@@ -1,6 +1,6 @@
 VERSION     ?= $(shell git describe --tags --always --dirty)
 BINARY_DIR  ?= dist
-BINARY_NAME ?= ssl-pubkey-fingerprint-exporter
+BINARY_NAME ?= spki-fingerprint-exporter
 PLATFORMS   ?= linux/386 linux/amd64 linux/arm64 linux/mips linux/mipsle linux/mips64 linux/mips64le linux/ppc64 linux/ppc64le linux/riscv64 linux/s390x netbsd/386 netbsd/amd64 openbsd/amd64 windows/amd64 darwin/amd64 darwin/arm64
 
 GO         ?= go
@@ -10,7 +10,7 @@ GOHOSTARCH ?= $(shell $(GO) env GOHOSTARCH)
 
 DOCKER            ?= docker
 DOCKER_REPO       ?= basa
-DOCKER_IMAGE_NAME ?= ssl-pubkey-fingerprint-exporter
+DOCKER_IMAGE_NAME ?= spki-fingerprint-exporter
 SHA256SUM         ?= $(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256)
 
 ARTIFACTS := $(foreach platform,$(PLATFORMS),$(BINARY_DIR)/$(BINARY_NAME)-$(subst /,-,$(platform)))

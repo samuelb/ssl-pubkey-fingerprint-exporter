@@ -233,6 +233,9 @@ func TestProbeHandler(t *testing.T) {
 			t.Fatalf("got status %d, should be %d", w.Code, http.StatusOK)
 		}
 		body := w.Body.String()
+		if !strings.Contains(body, "# TYPE spki_fingerprint gauge") {
+			t.Errorf("body should contain the SPKI fingerprint metric, got:\n%s", body)
+		}
 		if !strings.Contains(body, "probe_success 1") {
 			t.Errorf("body should contain probe_success 1, got:\n%s", body)
 		}
@@ -324,13 +327,13 @@ func TestProbeHandlerConcurrencyLimit(t *testing.T) {
 		httptest.NewRequest(http.MethodGet, "/metrics", nil),
 	)
 	metricsBody := metricsResponse.Body.String()
-	if !strings.Contains(metricsBody, "ssl_pubkey_fingerprint_exporter_rejected_probes_total 1") {
+	if !strings.Contains(metricsBody, "spki_fingerprint_exporter_rejected_probes_total 1") {
 		t.Errorf("metrics should contain one rejected probe, got:\n%s", metricsBody)
 	}
-	if !strings.Contains(metricsBody, `ssl_pubkey_fingerprint_exporter_probes_total{result="failure"} 1`) {
+	if !strings.Contains(metricsBody, `spki_fingerprint_exporter_probes_total{result="failure"} 1`) {
 		t.Errorf("metrics should contain one failed probe, got:\n%s", metricsBody)
 	}
-	if !strings.Contains(metricsBody, "ssl_pubkey_fingerprint_exporter_active_probes 0") {
+	if !strings.Contains(metricsBody, "spki_fingerprint_exporter_active_probes 0") {
 		t.Errorf("metrics should contain zero active probes, got:\n%s", metricsBody)
 	}
 }
@@ -386,6 +389,9 @@ func TestRootEscapesVersion(t *testing.T) {
 	)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !strings.Contains(w.Body.String(), "<title>SPKI fingerprint exporter</title>") {
+		t.Errorf("root page does not contain the renamed project title: %s", w.Body.String())
+	}
 	if strings.Contains(w.Body.String(), "<script>") {
 		t.Errorf("root page contains unescaped version: %s", w.Body.String())
 	}

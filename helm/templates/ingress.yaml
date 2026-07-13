@@ -7,15 +7,15 @@
 {{- fail (printf "ingress host %q must contain at least one path" .host) -}}
 {{- end -}}
 {{- end -}}
-{{- $fullName := include "ssl-pubkey-fingerprint-exporter.fullname" . -}}
-{{- $apiVersion := include "ssl-pubkey-fingerprint-exporter.ingress.apiVersion" . -}}
+{{- $fullName := include "spki-fingerprint-exporter.fullname" . -}}
+{{- $apiVersion := include "spki-fingerprint-exporter.ingress.apiVersion" . -}}
 apiVersion: {{ $apiVersion }}
 kind: Ingress
 metadata:
   name: {{ $fullName }}
   labels:
-    app.kubernetes.io/name: {{ include "ssl-pubkey-fingerprint-exporter.name" . }}
-    helm.sh/chart: {{ include "ssl-pubkey-fingerprint-exporter.chart" . }}
+    app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
+    helm.sh/chart: {{ include "spki-fingerprint-exporter.chart" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
   {{- with .Values.ingress.annotations }}

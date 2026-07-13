@@ -1,7 +1,14 @@
-# SSL public key fingerprint exporter
+# SPKI fingerprint exporter
 
-This Prometheus exporter allows you to monitor the public key fingerprints of
-your SSL certificates.
+Prometheus exporter for monitoring the SHA-256 fingerprints of the Subject
+Public Key Info (SPKI) in certificates presented by TLS services.
+
+> [!NOTE]
+> This project was previously named
+> [`ssl-pubkey-fingerprint-exporter`](https://github.com/samuelb/ssl-pubkey-fingerprint-exporter).
+> GitHub redirects links using that old repository name here, and releases
+> continue to publish `basa/ssl-pubkey-fingerprint-exporter` as a compatibility
+> alias for the renamed Docker image.
 
 ## Table of Contents
 - [Features](#features)
@@ -16,7 +23,7 @@ your SSL certificates.
 - [Getting the SHA-256 fingerprint](#getting-the-sha-256-fingerprint)
 
 ## Features
-- Monitor SSL certificate public key fingerprints
+- Monitor TLS certificate SPKI fingerprints
 - Support for both domain:port and full URL targets
 - Configurable timeout via environment variables
 - Docker support
@@ -52,8 +59,8 @@ configuration error rather than silently falling back to the default.
 
 ## Docker
 ```
-docker pull basa/ssl-pubkey-fingerprint-exporter
-docker run -p 3000:3000 basa/ssl-pubkey-fingerprint-exporter
+docker pull basa/spki-fingerprint-exporter
+docker run -p 3000:3000 basa/spki-fingerprint-exporter
 ```
 
 ## Helm
@@ -61,13 +68,13 @@ docker run -p 3000:3000 basa/ssl-pubkey-fingerprint-exporter
 Install the chart directly from the repository:
 
 ```bash
-helm install ssl-pubkey-fingerprint-exporter ./helm
+helm install spki-fingerprint-exporter ./helm
 ```
 
 To create a ServiceMonitor, provide at least one probe target:
 
 ```bash
-helm install ssl-pubkey-fingerprint-exporter ./helm \
+helm install spki-fingerprint-exporter ./helm \
   --set serviceMonitor.enabled=true \
   --set-string serviceMonitor.targets[0]=example.com:443
 ```
@@ -88,18 +95,19 @@ You can test the exporter using curl to make HTTP requests to the probe endpoint
 curl "http://localhost:3000/probe?target=example.com:443"
 
 # Test with a custom listen address
-LISTEN_ADDRESS=:8080 ./ssl-pubkey-fingerprint-exporter
+LISTEN_ADDRESS=:8080 ./spki-fingerprint-exporter
 curl "http://localhost:8080/probe?target=example.com:443"
 ```
 
 ## Metrics
 
-The response will be in Prometheus metrics format, showing the SSL certificate's public key fingerprint.
+The response is in Prometheus metrics format and includes the TLS certificate's
+SPKI fingerprint.
 
 ```
-# HELP ssl_pubkey_fingerprint SSL certificate publickey SHA-256 fingerprint
-# TYPE ssl_pubkey_fingerprint gauge
-ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey=",target="example.com:443"} 1
+# HELP spki_fingerprint TLS certificate Subject Public Key Info (SPKI) SHA-256 fingerprint.
+# TYPE spki_fingerprint gauge
+spki_fingerprint{fingerprint="base64encodedsha256sumofspki=",target="example.com:443"} 1
 # HELP probe_success Displays whether or not the probe was a success
 # TYPE probe_success gauge
 probe_success 1
@@ -114,9 +122,9 @@ a changed fingerprint from a failed probe.
 
 The exporter also exposes operational metrics on `/metrics`:
 
-- `ssl_pubkey_fingerprint_exporter_active_probes`
-- `ssl_pubkey_fingerprint_exporter_probes_total{result="success|failure"}`
-- `ssl_pubkey_fingerprint_exporter_rejected_probes_total`
+- `spki_fingerprint_exporter_active_probes`
+- `spki_fingerprint_exporter_probes_total{result="success|failure"}`
+- `spki_fingerprint_exporter_rejected_probes_total`
 
 Requests above `MAX_CONCURRENT_PROBES` receive HTTP 503 so overload is visible
 to Prometheus instead of creating an unbounded number of outbound connections.
@@ -137,7 +145,7 @@ explicitly.
 ### Scrape configuration
 ```yaml
 scrape_configs:
-  - job_name: "ssl-pubkey-fingerprint-exporter"
+  - job_name: "spki-fingerprint-exporter"
     metrics_path: /probe
     static_configs:
       - targets:
@@ -149,7 +157,7 @@ scrape_configs:
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: ssl-pubkey-fingerprint-exporter:3000
+        replacement: spki-fingerprint-exporter:3000
 ```
 
 ### Example PromQL queries
@@ -160,7 +168,7 @@ an unexpected fingerprint, not when the target was unreachable:
 ```
 probe_success{instance="example.com:443"} == 1
 unless on(instance)
-ssl_pubkey_fingerprint{fingerprint="base64encodedsha256sumofbinarypublickey="}
+spki_fingerprint{fingerprint="base64encodedsha256sumofspki="}
 ```
 
 Alert when the probe failed:
@@ -177,17 +185,17 @@ restrict access to your Prometheus servers.
 
 ## Getting the SHA-256 fingerprint
 
-Extract public key sha256 fingerprint from PEM-encoded certificate file
+Extract the SPKI SHA-256 fingerprint from a PEM-encoded certificate file
 ```sh
 openssl x509 -pubkey -noout -in certificate.pem | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
 ```
 
-Extract public key sha256 fingerprint from keyfile
+Extract the SPKI SHA-256 fingerprint from a private key file
 ```sh
 openssl rsa -in certificate.key -pubout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
 ```
 
-Extract public key sha256 fingerprint from HTTP server
+Extract the SPKI SHA-256 fingerprint from an HTTPS server
 ```sh
 servername=example.com; echo Q | openssl s_client -connect $servername:443 -servername $servername | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
 ```

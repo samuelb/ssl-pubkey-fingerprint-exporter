@@ -2,7 +2,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "ssl-pubkey-fingerprint-exporter.name" -}}
+{{- define "spki-fingerprint-exporter.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
@@ -11,7 +11,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "ssl-pubkey-fingerprint-exporter.fullname" -}}
+{{- define "spki-fingerprint-exporter.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -27,7 +27,7 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "ssl-pubkey-fingerprint-exporter.chart" -}}
+{{- define "spki-fingerprint-exporter.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
@@ -35,7 +35,7 @@ Create chart name and version as used by the chart label.
 Return the appropriate apiVersion for ingress based on the cluster's
 capabilities, falling back to the legacy APIs on old clusters.
 */}}
-{{- define "ssl-pubkey-fingerprint-exporter.ingress.apiVersion" -}}
+{{- define "spki-fingerprint-exporter.ingress.apiVersion" -}}
 {{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version -}}
 networking.k8s.io/v1
 {{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.Version -}}
