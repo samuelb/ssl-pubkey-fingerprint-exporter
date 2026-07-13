@@ -5,8 +5,10 @@ name: Release
 # from conventional commits since the last stable tag (override via the
 # bump input), the Helm chart version is updated and committed, the tag
 # is created, binaries are built and attached to a GitHub release with
-# generated release notes, multi-arch Docker images are pushed, and the
-# Helm chart is published to ghcr.io as an OCI artifact.
+# generated release notes, multi-arch Docker images are pushed with
+# SLSA provenance and SBOM attestations, and the Helm chart is
+# published to ghcr.io as an OCI artifact. Images and chart are signed
+# with cosign (keyless, via the GitHub OIDC identity).
 
 on:
   workflow_dispatch:
@@ -170,10 +172,14 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # For cosign keyless signing
+      id-token: write
     steps:
       - uses: azure/setup-helm@v5
         with:
           version: v3.18.4
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
@@ -182,9 +188,19 @@ jobs:
       - name: Push chart to GitHub Container Registry
         run: |
           helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin <<< "${GITHUB_TOKEN}"
-          helm push dist/spki-fingerprint-exporter-*.tgz "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
+          helm push dist/spki-fingerprint-exporter-*.tgz \
+            "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts" &> push.log
+          cat push.log
+          echo "digest=$(awk '/Digest:/ {print $2}' push.log)" >> "$GITHUB_OUTPUT"
+        id: push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sign chart with cosign (keyless)
+        run: |
+          cosign sign --yes \
+            "ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/spki-fingerprint-exporter@${DIGEST}"
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
 
   docker:
     name: Build and Push Docker Images
@@ -193,6 +209,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # For cosign keyless signing
+      id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -229,6 +247,7 @@ jobs:
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=latest
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -237,5 +256,17 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # SLSA provenance and SBOM attestations
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4
+      - name: Sign images with cosign (keyless)
+        run: |
+          while IFS= read -r image; do
+            [ -n "$image" ] && cosign sign --yes "${image}@${DIGEST}"
+          done <<< "${DOCKER_IMAGES}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
