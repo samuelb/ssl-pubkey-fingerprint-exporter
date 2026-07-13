@@ -251,10 +251,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGES }}
-          # Both v-prefixed and plain tags: the Helm chart defaults the
+          # Plain version tag (no v prefix): the Helm chart defaults the
           # image tag to the plain appVersion.
           tags: |
-            type=raw,value=${{ needs.version.outputs.tag }}
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=latest
       - name: Build and push
