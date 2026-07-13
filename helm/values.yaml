@@ -53,6 +53,9 @@ serviceMonitor:
   interval: 30s
   scrapeTimeout: 10s
   additionalLabels: {}
+  # Also scrape the exporter's own /metrics endpoint (operational metrics
+  # such as spki_fingerprint_exporter_probes_total).
+  selfMonitor: true
   # targets:
   #   - example.com:443
   #   - https://example.org

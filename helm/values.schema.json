@@ -49,12 +49,13 @@
     "serviceMonitor": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["enabled", "interval", "scrapeTimeout", "additionalLabels", "targets"],
+      "required": ["enabled", "interval", "scrapeTimeout", "additionalLabels", "selfMonitor", "targets"],
       "properties": {
         "enabled": { "type": "boolean" },
         "interval": { "type": "string", "minLength": 1 },
         "scrapeTimeout": { "type": "string", "minLength": 1 },
         "additionalLabels": { "type": "object" },
+        "selfMonitor": { "type": "boolean" },
         "targets": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
@@ -97,8 +98,11 @@
       "if": {
         "properties": {
           "serviceMonitor": {
-            "properties": { "enabled": { "const": true } },
-            "required": ["enabled"]
+            "properties": {
+              "enabled": { "const": true },
+              "selfMonitor": { "const": false }
+            },
+            "required": ["enabled", "selfMonitor"]
           }
         }
       },

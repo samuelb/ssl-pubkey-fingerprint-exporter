@@ -1,6 +1,6 @@
 {{- if .Values.serviceMonitor.enabled }}
-{{- if not .Values.serviceMonitor.targets }}
-{{- fail "serviceMonitor.targets must contain at least one target when serviceMonitor is enabled" }}
+{{- if and (not .Values.serviceMonitor.targets) (not .Values.serviceMonitor.selfMonitor) }}
+{{- fail "serviceMonitor.targets must contain at least one target when serviceMonitor is enabled and selfMonitor is disabled" }}
 {{- end }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -20,6 +20,12 @@ spec:
       app.kubernetes.io/name: {{ include "spki-fingerprint-exporter.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   endpoints:
+    {{- if .Values.serviceMonitor.selfMonitor }}
+    - port: http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+    {{- end }}
     {{- range .Values.serviceMonitor.targets }}
     - port: http
       path: /probe

@@ -50,7 +50,8 @@ port, it is derived from the URL scheme.
 | `podSecurityContext` | Pod security context | non-root, `RuntimeDefault` seccomp |
 | `securityContext` | Container security context | read-only root FS, all capabilities dropped |
 | `serviceMonitor.enabled` | Create a ServiceMonitor for the Prometheus Operator | `false` |
-| `serviceMonitor.targets` | TLS targets to probe (required when enabled) | `[]` |
+| `serviceMonitor.selfMonitor` | Also scrape the exporter's own `/metrics` endpoint | `true` |
+| `serviceMonitor.targets` | TLS targets to probe (required when enabled, unless `selfMonitor` covers you) | `[]` |
 | `serviceMonitor.interval` | Scrape interval | `30s` |
 | `serviceMonitor.scrapeTimeout` | Scrape timeout | `10s` |
 | `serviceMonitor.additionalLabels` | Extra labels on the ServiceMonitor (e.g. to match a Prometheus selector) | `{}` |
@@ -91,9 +92,14 @@ unless on(instance)
 spki_fingerprint{fingerprint="base64encodedsha256sumofspki="}
 ```
 
+With `serviceMonitor.selfMonitor` enabled (the default), the exporter's own
+`/metrics` endpoint is scraped as well, providing operational metrics such as
+`spki_fingerprint_exporter_probes_total` and
+`spki_fingerprint_exporter_rejected_probes_total`.
+
 See the [project README](https://github.com/samuelb/spki-fingerprint-exporter)
-for how to compute the expected fingerprint with `openssl`, operational
-metrics on `/metrics`, and configuration details.
+for how to compute the expected fingerprint with `openssl` and configuration
+details.
 
 ## Security considerations
 
