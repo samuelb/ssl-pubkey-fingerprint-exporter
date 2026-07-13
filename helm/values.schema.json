@@ -14,6 +14,14 @@
         "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
       }
     },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string", "minLength": 1 } }
+      }
+    },
     "nameOverride": { "type": "string" },
     "fullnameOverride": { "type": "string" },
     "serviceAccount": {
@@ -33,7 +41,8 @@
       "required": ["type", "port"],
       "properties": {
         "type": { "type": "string", "minLength": 1 },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "annotations": { "type": "object" }
       }
     },
     "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
@@ -55,6 +64,10 @@
         "properties": { "name": { "type": "string", "minLength": 1 } }
       }
     },
+    "livenessProbe": { "type": "object" },
+    "readinessProbe": { "type": "object" },
+    "podAnnotations": { "type": "object" },
+    "podLabels": { "type": "object" },
     "podSecurityContext": { "type": "object" },
     "securityContext": { "type": "object" },
     "serviceMonitor": {
@@ -112,7 +125,9 @@
     "resources": { "type": "object" },
     "nodeSelector": { "type": "object" },
     "tolerations": { "type": "array", "items": { "type": "object" } },
-    "affinity": { "type": "object" }
+    "affinity": { "type": "object" },
+    "priorityClassName": { "type": "string" },
+    "topologySpreadConstraints": { "type": "array", "items": { "type": "object" } }
   },
   "allOf": [
     {

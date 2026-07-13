@@ -38,6 +38,7 @@ port, it is derived from the URL scheme.
 | `image.repository` | Image repository | `basa/spki-fingerprint-exporter` |
 | `image.tag` | Image tag | chart `appVersion` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
+| `imagePullSecrets` | Pull secrets for private registries | `[]` |
 | `nameOverride` | Override the chart name | `""` |
 | `fullnameOverride` | Override the full resource name | `""` |
 | `serviceAccount.create` | Create a dedicated ServiceAccount | `true` |
@@ -46,11 +47,16 @@ port, it is derived from the URL scheme.
 | `serviceAccount.automount` | Mount the API token into the pod (the exporter needs no API access) | `false` |
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `3000` |
+| `service.annotations` | Service annotations | `{}` |
 | `containerPort` | Port the exporter listens on; also sets `LISTEN_ADDRESS` | `3000` |
 | `listenHost` | Optional interface/address to bind (the container port is appended) | `""` |
 | `healthProbes.livenessPath` | Liveness probe path | `/-/healthy` |
 | `healthProbes.readinessPath` | Readiness probe path | `/-/ready` |
+| `livenessProbe` | Full liveness probe spec; replaces the default httpGet probe when set | `{}` |
+| `readinessProbe` | Full readiness probe spec; replaces the default httpGet probe when set | `{}` |
 | `env` | Additional environment variables (e.g. `DEFAULT_TIMEOUT`, `MAX_CONCURRENT_PROBES`) | `[]` |
+| `podAnnotations` | Extra pod annotations | `{}` |
+| `podLabels` | Extra pod labels | `{}` |
 | `podSecurityContext` | Pod security context | non-root, `RuntimeDefault` seccomp |
 | `securityContext` | Container security context | read-only root FS, all capabilities dropped |
 | `serviceMonitor.enabled` | Create a ServiceMonitor for the Prometheus Operator | `false` |
@@ -71,6 +77,8 @@ port, it is derived from the URL scheme.
 | `nodeSelector` | Node selector | `{}` |
 | `tolerations` | Tolerations | `[]` |
 | `affinity` | Affinity rules | `{}` |
+| `priorityClassName` | Pod priority class | `""` |
+| `topologySpreadConstraints` | Topology spread constraints | `[]` |
 
 Notes:
 

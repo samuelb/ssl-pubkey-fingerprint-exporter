@@ -9,6 +9,9 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
+imagePullSecrets: []
+# - name: registry-credentials
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -26,6 +29,7 @@ serviceAccount:
 service:
   type: ClusterIP
   port: 3000
+  annotations: {}
 
 # Port the exporter listens on inside the container. The chart derives the
 # LISTEN_ADDRESS environment variable from this value.
@@ -38,12 +42,27 @@ healthProbes:
   livenessPath: /-/healthy
   readinessPath: /-/ready
 
+# Full livenessProbe/readinessProbe specs. When set, they replace the
+# default httpGet probes built from healthProbes above, e.g.:
+# livenessProbe:
+#   httpGet:
+#     path: /-/healthy
+#     port: http
+#   periodSeconds: 30
+#   timeoutSeconds: 5
+livenessProbe: {}
+readinessProbe: {}
+
 # Additional environment variables for the exporter container, e.g.:
 # env:
 #   - name: DEFAULT_TIMEOUT
 #     value: "10"
 # LISTEN_ADDRESS is managed by the chart and must not be repeated here.
 env: []
+
+# Additional annotations and labels for the pods.
+podAnnotations: {}
+podLabels: {}
 
 podSecurityContext:
   runAsNonRoot: true
@@ -149,3 +168,13 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+priorityClassName: ""
+
+topologySpreadConstraints: []
+# - maxSkew: 1
+#   topologyKey: kubernetes.io/hostname
+#   whenUnsatisfiable: ScheduleAnyway
+#   labelSelector:
+#     matchLabels:
+#       app.kubernetes.io/name: spki-fingerprint-exporter
