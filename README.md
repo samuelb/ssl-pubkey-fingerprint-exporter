@@ -6,8 +6,9 @@ Key Info (SPKI) in certificates presented by TLS services.
 > [!NOTE]
 > Previously named
 > [`ssl-pubkey-fingerprint-exporter`](https://github.com/samuelb/ssl-pubkey-fingerprint-exporter).
-> GitHub redirects old links, and releases still publish
-> `basa/ssl-pubkey-fingerprint-exporter` as a Docker image alias.
+> GitHub redirects old links. The `basa/ssl-pubkey-fingerprint-exporter`
+> Docker image alias is no longer updated; use
+> `basa/spki-fingerprint-exporter` instead.
 
 ## Usage
 
@@ -15,6 +16,9 @@ Key Info (SPKI) in certificates presented by TLS services.
 docker run -p 3000:3000 basa/spki-fingerprint-exporter
 curl "http://localhost:3000/probe?target=example.com:443"
 ```
+
+Images are published to Docker Hub (`basa/spki-fingerprint-exporter`) and
+GitHub Container Registry (`ghcr.io/samuelb/spki-fingerprint-exporter`).
 
 Or build from source with `make` (binaries land in `dist/`).
 
