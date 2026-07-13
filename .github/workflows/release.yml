@@ -1,9 +1,31 @@
 name: Release
 
+# Fully automated release: trigger it manually from the Actions tab and
+# everything else happens automatically. The next version is derived
+# from conventional commits since the last stable tag (override via the
+# bump input), CHANGELOG.md and the Helm chart version are updated and
+# committed, the tag is created, binaries are built and attached to a
+# GitHub release, and multi-arch Docker images are pushed.
+
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (auto derives it from conventional commits)"
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 env:
   GO_VERSION: '1.24'
@@ -21,18 +43,71 @@ jobs:
       - name: Run tests
         run: make test
 
+  version:
+    name: Bump version, changelog and tag
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.version }}
+      version: ${{ steps.strip.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Update changelog and compute next version
+        id: bump
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --bump=${{ inputs.bump }} --output CHANGELOG.md
+      - name: Render release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --bump=${{ inputs.bump }} --unreleased --strip all --output RELEASE_NOTES.md
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+      - name: Strip v prefix
+        id: strip
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ steps.bump.outputs.version }}
+      - name: Update Helm chart version
+        run: |
+          sed -i \
+            -e "s/^version:.*/version: ${VERSION}/" \
+            -e "s/^appVersion:.*/appVersion: \"${VERSION}\"/" \
+            helm/Chart.yaml
+        env:
+          VERSION: ${{ steps.strip.outputs.version }}
+      - name: Commit, tag and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md helm/Chart.yaml
+          git commit -m "chore(release): ${TAG}"
+          git tag "${TAG}"
+          git push --atomic origin HEAD "refs/tags/${TAG}"
+        env:
+          TAG: ${{ steps.bump.outputs.version }}
+
   build:
     name: Build
-    needs: test
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          # Full history so git describe resolves the exact tag
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Build for all platforms
-        run: make build-all
-      - name: Create checksums
+      - name: Build for all platforms and create checksums
         run: make release
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -44,31 +119,37 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: binaries
           path: dist
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          body_path: RELEASE_NOTES.md
           files: |
             dist/ssl-pubkey-fingerprint-exporter-*
             dist/sha256sums.txt
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
     name: Build and Push Docker Images
-    needs: [build, release]
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -88,10 +169,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGE }}
+          # Both v-prefixed and plain tags: the Helm chart defaults the
+          # image tag to the plain appVersion.
           tags: |
-            type=ref,event=tag
-            # Tag stable releases as latest; skip prereleases like v1.2.3-rc1
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=${{ needs.version.outputs.tag }}
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=raw,value=latest
       - name: Build and push
         uses: docker/build-push-action@v6
         with:

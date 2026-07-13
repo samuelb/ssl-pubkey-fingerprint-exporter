@@ -27,6 +27,15 @@ make
 ```
 The created binaries will end up in the folder `dist/`.
 
+## Releasing
+
+Releases are fully automated: trigger the *Release* workflow from the
+GitHub Actions tab (optionally overriding the version bump level). The
+workflow derives the next version from the conventional commits since
+the last stable tag, updates `CHANGELOG.md` and the Helm chart version,
+creates the tag and GitHub release with binaries, and pushes the
+multi-arch Docker images.
+
 ## Configuration
 
 The exporter can be configured using environment variables:
