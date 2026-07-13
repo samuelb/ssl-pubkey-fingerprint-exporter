@@ -67,7 +67,13 @@ func TestGetScrapeTimeout(t *testing.T) {
 		{"no header", "", defaultTimeout, false},
 		{"header with offset headroom", "5", 4500 * time.Millisecond, false},
 		{"header below offset", "0.2", 100 * time.Millisecond, false},
-		{"negative header", "-1", defaultTimeout, false},
+		{"negative header", "-1", 0, true},
+		{"zero header", "0", 0, true},
+		{"NaN header", "NaN", 0, true},
+		{"infinite header", "+Inf", 0, true},
+		{"overflowing header", "1e20", 0, true},
+		{"duration boundary header", "9223372037.354776", 0, true},
+		{"sub-nanosecond header", "1e-10", 0, true},
 		{"invalid header", "not-a-number", 0, true},
 	}
 
@@ -90,6 +96,58 @@ func TestGetScrapeTimeout(t *testing.T) {
 			}
 			if timeout != test.output {
 				t.Errorf("header %q: got %v, should be %v", test.header, timeout, test.output)
+			}
+		})
+	}
+}
+
+func TestGetConfig(t *testing.T) {
+	tests := []struct {
+		name           string
+		listenAddress  string
+		defaultTimeout string
+		want           Config
+		shouldError    bool
+	}{
+		{
+			name: "defaults",
+			want: Config{ListenAddress: defaultListenAddress, DefaultTimeout: defaultTimeout},
+		},
+		{
+			name:           "integer seconds",
+			listenAddress:  ":8080",
+			defaultTimeout: "15",
+			want:           Config{ListenAddress: ":8080", DefaultTimeout: 15 * time.Second},
+		},
+		{
+			name:           "duration",
+			defaultTimeout: "750ms",
+			want:           Config{ListenAddress: defaultListenAddress, DefaultTimeout: 750 * time.Millisecond},
+		},
+		{name: "invalid timeout", defaultTimeout: "later", shouldError: true},
+		{name: "zero timeout", defaultTimeout: "0", shouldError: true},
+		{name: "negative timeout", defaultTimeout: "-1s", shouldError: true},
+		{name: "overflowing seconds", defaultTimeout: "999999999999999999", shouldError: true},
+		{name: "integer parse overflow", defaultTimeout: "99999999999999999999999", shouldError: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("LISTEN_ADDRESS", test.listenAddress)
+			t.Setenv("DEFAULT_TIMEOUT", test.defaultTimeout)
+
+			config, err := getConfig()
+			if test.shouldError {
+				if err == nil {
+					t.Fatal("getConfig did not return an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("getConfig returned an unexpected error: %v", err)
+			}
+			if config != test.want {
+				t.Errorf("getConfig returned %+v, want %+v", config, test.want)
 			}
 		})
 	}

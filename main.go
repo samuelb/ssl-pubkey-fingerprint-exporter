@@ -227,19 +227,27 @@ func getScrapeTimeout(r *http.Request, defaultTimeout time.Duration) (time.Durat
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: %w", err)
 		}
+		if math.IsNaN(timeoutSeconds) || math.IsInf(timeoutSeconds, 0) || timeoutSeconds <= 0 {
+			return 0, fmt.Errorf("Prometheus scrape timeout must be a positive finite number, got %q", v)
+		}
 		// Leave some headroom to respond before Prometheus closes the
 		// connection, like the blackbox exporter does. For timeouts
 		// shorter than twice the offset, reserve half the timeout so
 		// there is always room to report probe_success 0.
 		timeoutSeconds = math.Max(timeoutSeconds-scrapeTimeoutOffset.Seconds(), timeoutSeconds/2)
-		if timeoutSeconds > 0 {
-			return time.Duration(timeoutSeconds * float64(time.Second)), nil
+		if timeoutSeconds >= float64(math.MaxInt64)/float64(time.Second) {
+			return 0, fmt.Errorf("Prometheus scrape timeout is too large: %q", v)
 		}
+		timeout := time.Duration(timeoutSeconds * float64(time.Second))
+		if timeout <= 0 {
+			return 0, fmt.Errorf("Prometheus scrape timeout is too small: %q", v)
+		}
+		return timeout, nil
 	}
 	return defaultTimeout, nil
 }
 
-func getConfig() Config {
+func getConfig() (Config, error) {
 	config := Config{
 		ListenAddress:  defaultListenAddress,
 		DefaultTimeout: defaultTimeout,
@@ -250,16 +258,44 @@ func getConfig() Config {
 	}
 
 	if timeout := os.Getenv("DEFAULT_TIMEOUT"); timeout != "" {
-		if seconds, err := strconv.Atoi(timeout); err == nil && seconds > 0 {
-			config.DefaultTimeout = time.Duration(seconds) * time.Second
+		parsedTimeout, err := parseDefaultTimeout(timeout)
+		if err != nil {
+			return Config{}, err
 		}
+		config.DefaultTimeout = parsedTimeout
 	}
 
-	return config
+	return config, nil
+}
+
+func parseDefaultTimeout(value string) (time.Duration, error) {
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err == nil {
+		if seconds <= 0 || seconds > int64(math.MaxInt64)/int64(time.Second) {
+			return 0, fmt.Errorf("DEFAULT_TIMEOUT must be positive and fit in a duration, got %q", value)
+		}
+		return time.Duration(seconds) * time.Second, nil
+	}
+	if errors.Is(err, strconv.ErrRange) {
+		return 0, fmt.Errorf("DEFAULT_TIMEOUT integer seconds value is out of range: %q", value)
+	}
+
+	timeout, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse DEFAULT_TIMEOUT %q: use seconds or a Go duration: %w", value, err)
+	}
+	if timeout <= 0 {
+		return 0, fmt.Errorf("DEFAULT_TIMEOUT must be positive, got %q", value)
+	}
+	return timeout, nil
 }
 
 func main() {
-	config := getConfig()
+	config, err := getConfig()
+	if err != nil {
+		slog.Error("Invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("Starting server", "version", Version, "address", config.ListenAddress)
 

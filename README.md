@@ -43,7 +43,10 @@ The exporter can be configured using environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LISTEN_ADDRESS` | Address to listen on | `:3000` |
-| `DEFAULT_TIMEOUT` | Default timeout in seconds | `10` |
+| `DEFAULT_TIMEOUT` | Default timeout as integer seconds or a Go duration such as `750ms` or `15s` | `10` |
+
+Invalid or non-positive timeout values cause the exporter to exit with a
+configuration error rather than silently falling back to the default.
 
 ## Docker
 ```
