@@ -163,6 +163,25 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
+# Create a PodDisruptionBudget. Only useful with more than one replica;
+# set either minAvailable or maxUnavailable.
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+
+# Create a NetworkPolicy that restricts ingress to the exporter port.
+# Egress stays open because the exporter probes arbitrary TLS targets.
+networkPolicy:
+  enabled: false
+  # Peers allowed to reach the exporter; everything may connect when
+  # empty, e.g.:
+  # ingressFrom:
+  #   - namespaceSelector:
+  #       matchLabels:
+  #         kubernetes.io/metadata.name: monitoring
+  ingressFrom: []
+
 nodeSelector: {}
 
 tolerations: []

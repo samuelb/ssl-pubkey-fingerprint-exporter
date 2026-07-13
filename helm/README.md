@@ -74,6 +74,11 @@ port, it is derived from the URL scheme.
 | `ingress.hosts` | Ingress hosts and paths | see `values.yaml` |
 | `ingress.tls` | Ingress TLS configuration | `[]` |
 | `resources` | Container resource requests/limits | `{}` |
+| `podDisruptionBudget.enabled` | Create a PodDisruptionBudget (useful with `replicaCount` > 1) | `false` |
+| `podDisruptionBudget.minAvailable` | Minimum available pods (mutually exclusive with `maxUnavailable`) | `1` |
+| `podDisruptionBudget.maxUnavailable` | Maximum unavailable pods | `""` |
+| `networkPolicy.enabled` | Create a NetworkPolicy restricting ingress to the exporter port | `false` |
+| `networkPolicy.ingressFrom` | Peers allowed to reach the exporter (empty allows all) | `[]` |
 | `nodeSelector` | Node selector | `{}` |
 | `tolerations` | Tolerations | `[]` |
 | `affinity` | Affinity rules | `{}` |
