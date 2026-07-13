@@ -5,7 +5,8 @@ name: Release
 # from conventional commits since the last stable tag (override via the
 # bump input), the Helm chart version is updated and committed, the tag
 # is created, binaries are built and attached to a GitHub release with
-# generated release notes, and multi-arch Docker images are pushed.
+# generated release notes, multi-arch Docker images are pushed, and the
+# Helm chart is published to ghcr.io as an OCI artifact.
 
 on:
   workflow_dispatch:
@@ -158,6 +159,29 @@ jobs:
             dist/spki-fingerprint-exporter-darwin-*
             dist/sha256sums.txt
             dist/*.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  helm:
+    name: Push Helm Chart
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.18.4
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: binaries
+          path: dist
+      - name: Push chart to GitHub Container Registry
+        run: |
+          helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin <<< "${GITHUB_TOKEN}"
+          helm push dist/spki-fingerprint-exporter-*.tgz "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

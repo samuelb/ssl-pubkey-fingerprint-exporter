@@ -3,4 +3,9 @@ type: application
 appVersion: "0.5.0"
 description: A Helm chart for spki-fingerprint-exporter
 name: spki-fingerprint-exporter
+home: https://github.com/samuelb/spki-fingerprint-exporter
+# Helm maps sources[0] to the org.opencontainers.image.source OCI
+# annotation, which links the ghcr.io package to this repository.
+sources:
+  - https://github.com/samuelb/spki-fingerprint-exporter
 version: 0.5.0

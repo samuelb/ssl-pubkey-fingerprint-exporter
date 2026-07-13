@@ -40,11 +40,12 @@ not a silent fallback.
 ## Helm
 
 ```bash
-helm install spki-fingerprint-exporter ./helm
+helm install spki-fingerprint-exporter oci://ghcr.io/samuelb/charts/spki-fingerprint-exporter
 ```
 
 Add `--set serviceMonitor.enabled=true --set-string serviceMonitor.targets[0]=example.com:443`
-to create a ServiceMonitor. Packaged charts are attached to GitHub releases.
+to create a ServiceMonitor. Packaged charts are also attached to GitHub
+releases, or install from a checkout with `helm install spki-fingerprint-exporter ./helm`.
 
 Notes:
 - `containerPort` sets both the container port and `LISTEN_ADDRESS`; do not add
