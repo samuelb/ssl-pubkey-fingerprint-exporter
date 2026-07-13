@@ -30,3 +30,17 @@ Create chart name and version as used by the chart label.
 {{- define "ssl-pubkey-fingerprint-exporter.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{/*
+Return the appropriate apiVersion for ingress based on the cluster's
+capabilities, falling back to the legacy APIs on old clusters.
+*/}}
+{{- define "ssl-pubkey-fingerprint-exporter.ingress.apiVersion" -}}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version -}}
+networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.Version -}}
+networking.k8s.io/v1beta1
+{{- else -}}
+extensions/v1beta1
+{{- end -}}
+{{- end -}}
