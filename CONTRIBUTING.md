@@ -16,7 +16,7 @@ You'll need Go (see `go.mod` for the minimum version).
 
 ## Making changes
 
-1. Create a feature branch from `master`.
+1. Create a feature branch from `main`.
 2. Keep your change focused — one topic per pull request.
 3. Format with `gofmt`, add tests for behavioral changes, and make sure
    `make test` passes.
